@@ -127,8 +127,7 @@ function LoginForm() {
       if (res?.error) {
         setError("Invalid email or password. Please verify your credentials.");
       } else {
-        router.push(callbackUrl);
-        router.refresh();
+        window.location.href = res?.url || callbackUrl;
       }
     } catch {
       setError("An unexpected error occurred. Please try again.");
