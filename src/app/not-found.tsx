@@ -1,0 +1,2 @@
+import Link from "next/link";
+export default function NotFound() { return <main className="grid min-h-screen place-items-center bg-slate-50 p-6 text-center"><div><p className="text-sm font-semibold text-indigo-600">Beacon</p><h1 className="mt-2 text-2xl font-semibold">This page does not exist</h1><Link className="mt-5 inline-block rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white" href="/projects/beacon">Return to issues</Link></div></main>; }

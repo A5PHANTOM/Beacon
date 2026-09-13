@@ -1,0 +1,133 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String          @id @default(cuid())
+  name         String
+  email        String          @unique
+  passwordHash String
+  role         String          @default("MEMBER") // ADMIN | MEMBER
+  createdAt    DateTime        @default(now())
+  memberships  ProjectMember[]
+  reported     Issue[]         @relation("Reporter")
+  assigned     Issue[]         @relation("Assignee")
+  comments     Comment[]
+  history      IssueHistory[]
+  attachments  Attachment[]
+  notifications Notification[]
+}
+
+model Project {
+  id          String          @id @default(cuid())
+  name        String
+  key         String          @unique
+  description String?
+  createdById String
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+  members     ProjectMember[]
+  issues      Issue[]
+}
+
+model ProjectMember {
+  projectId     String
+  userId        String
+  roleInProject String        @default("DEVELOPER") // LEAD | DEVELOPER | QA | VIEWER
+  project       Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user          User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([projectId, userId])
+}
+
+model Issue {
+  id               String         @id @default(cuid())
+  projectId        String
+  number           Int
+  title            String
+  description      String?
+  stepsToReproduce String?
+  expected         String?
+  actual           String?
+  environment      String?
+  status           String         @default("REPORTED") // REPORTED | TRIAGED | IN_PROGRESS | FIXED | VERIFIED | CLOSED
+  severity         String         @default("MEDIUM")   // LOW | MEDIUM | HIGH | CRITICAL
+  priority         String         @default("MEDIUM")   // LOW | MEDIUM | HIGH | URGENT
+  reporterId       String
+  assigneeId       String?
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+  project          Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  reporter         User           @relation("Reporter", fields: [reporterId], references: [id])
+  assignee         User?          @relation("Assignee", fields: [assigneeId], references: [id])
+  comments         Comment[]
+  attachments      Attachment[]
+  history          IssueHistory[]
+  outgoingLinks    IssueLink[]    @relation("SourceIssue")
+  incomingLinks    IssueLink[]    @relation("LinkedIssue")
+
+  @@unique([projectId, number])
+  @@index([projectId, status])
+  @@index([projectId, assigneeId])
+}
+
+model IssueLink {
+  issueId       String
+  linkedIssueId String
+  linkType      String // DUPLICATE | BLOCKS | RELATES_TO | CHILD_OF
+  issue         Issue  @relation("SourceIssue", fields: [issueId], references: [id], onDelete: Cascade)
+  linkedIssue   Issue  @relation("LinkedIssue", fields: [linkedIssueId], references: [id], onDelete: Cascade)
+
+  @@id([issueId, linkedIssueId, linkType])
+}
+
+model Comment {
+  id        String   @id @default(cuid())
+  issueId   String
+  userId    String
+  body      String
+  createdAt DateTime @default(now())
+  issue     Issue    @relation(fields: [issueId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Attachment {
+  id         String   @id @default(cuid())
+  issueId    String
+  uploadedBy String
+  fileUrl    String
+  filename   String
+  size       Int
+  uploadedAt DateTime @default(now())
+  issue      Issue    @relation(fields: [issueId], references: [id], onDelete: Cascade)
+  user       User     @relation(fields: [uploadedBy], references: [id], onDelete: Cascade)
+}
+
+model IssueHistory {
+  id           String   @id @default(cuid())
+  issueId      String
+  userId       String
+  fieldChanged String
+  oldValue     String?
+  newValue     String?
+  changedAt    DateTime @default(now())
+  issue        Issue    @relation(fields: [issueId], references: [id], onDelete: Cascade)
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([issueId, changedAt])
+}
+
+model Notification {
+  id        String    @id @default(cuid())
+  userId    String
+  issueId   String
+  type      String
+  readAt    DateTime?
+  createdAt DateTime  @default(now())
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
