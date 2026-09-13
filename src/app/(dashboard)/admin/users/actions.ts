@@ -6,14 +6,36 @@ import { prisma } from "@/lib/db";
 import { requireAdmin } from "@/lib/auth";
 import { revalidatePath } from "next/cache";
 
+const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9]+([.-][a-zA-Z0-9]+)*\.[a-zA-Z]{2,}$/;
+
 const createUserSchema = z.object({
   name: z.string().trim().min(2, "Name must be at least 2 characters"),
-  email: z.string().trim().toLowerCase().email("Invalid email address"),
+  email: z
+    .string()
+    .trim()
+    .toLowerCase()
+    .min(1, "Email address is required")
+    .regex(emailRegex, "Please enter a valid email address (e.g. name@company.com)"),
   password: z.string().min(4, "Password must be at least 4 characters"),
   role: z.enum(["ADMIN", "MEMBER"]),
   assignToProjectId: z.string().optional(),
   projectRole: z.enum(["DEVELOPER", "QA", "LEAD", "VIEWER"]).optional(),
 });
+
+export async function checkEmailExistsAction(email: string) {
+  try {
+    await requireAdmin();
+    const normalized = email.trim().toLowerCase();
+    if (!normalized) return { exists: false };
+    const user = await prisma.user.findUnique({
+      where: { email: normalized },
+      select: { id: true, name: true, email: true },
+    });
+    return { exists: Boolean(user), user };
+  } catch {
+    return { exists: false };
+  }
+}
 
 export async function createUserAction(formData: {
   name: string;
@@ -42,7 +64,10 @@ export async function createUserAction(formData: {
     });
 
     if (existing) {
-      return { success: false, error: "A user with this email address already exists" };
+      return {
+        success: false,
+        error: `Warning: A user with the email address "${email}" already exists. Duplicate emails cannot be used.`,
+      };
     }
 
     const passwordHash = await bcrypt.hash(password, 10);

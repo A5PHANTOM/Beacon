@@ -46,10 +46,12 @@ export function Navbar({
         {/* Left: Brand + Project Switcher + Nav Links */}
         <div className="flex items-center gap-6">
           <Link href="/projects" className="flex items-center gap-2.5 font-bold tracking-tight text-slate-900">
-            <span className="grid h-8 w-8 place-items-center rounded-lg bg-indigo-600 font-bold text-white shadow-sm shadow-indigo-200">
-              B
-            </span>
-            <span className="text-lg">Beacon</span>
+            <img
+              src="/logo.png"
+              alt="Beacon Logo"
+              className="h-8 w-8 object-cover rounded-lg shadow-xs"
+            />
+            <span className="text-lg tracking-tight">Beacon</span>
           </Link>
 
           {/* Project Switcher Dropdown */}

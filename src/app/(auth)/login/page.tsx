@@ -113,6 +113,12 @@ function LoginForm() {
       return;
     }
 
+    const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9]+([.-][a-zA-Z0-9]+)*\.[a-zA-Z]{2,}$/;
+    if (!emailRegex.test(email.trim())) {
+      setError("Please enter a valid email address format (e.g. name@company.com).");
+      return;
+    }
+
     setError("");
     setLoading(true);
 
@@ -157,20 +163,19 @@ function LoginForm() {
             display: "inline-flex",
             alignItems: "center",
             justifyContent: "center",
-            width: 44,
-            height: 44,
+            width: 52,
+            height: 52,
             borderRadius: 12,
-            background: "linear-gradient(135deg, #0F172A 0%, #1E293B 100%)",
-            color: "#FFFFFF",
+            overflow: "hidden",
             marginBottom: 12,
-            boxShadow: "0 4px 12px rgba(15, 23, 42, 0.12)",
+            boxShadow: "0 4px 14px rgba(15, 23, 42, 0.12)",
           }}
         >
-          {/* Glowing Beacon Logo */}
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M12 2v4M4.93 4.93l2.83 2.83M2 12h4M4.93 19.07l2.83-2.83M12 22v-4M19.07 19.07l-2.83-2.83M22 12h-4M19.07 4.93l-2.83 2.83" />
-            <circle cx="12" cy="12" r="3" fill="#38BDF8" stroke="#38BDF8" />
-          </svg>
+          <img
+            src="/logo.png"
+            alt="Beacon Logo"
+            style={{ width: "100%", height: "100%", objectFit: "cover" }}
+          />
         </div>
 
         <h1

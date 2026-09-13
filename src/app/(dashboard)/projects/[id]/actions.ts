@@ -18,6 +18,13 @@ const createIssueSchema = z.object({
   severity: z.enum(["LOW", "MEDIUM", "HIGH", "CRITICAL"]).default("MEDIUM"),
   priority: z.enum(["LOW", "MEDIUM", "HIGH", "URGENT"]).default("MEDIUM"),
   assigneeId: z.string().min(1, "Assigning a developer is mandatory"),
+  image: z
+    .object({
+      filename: z.string(),
+      fileUrl: z.string(),
+      size: z.number().default(0),
+    })
+    .optional(),
 });
 
 export async function createIssueAction(data: z.infer<typeof createIssueSchema>) {
@@ -42,6 +49,7 @@ export async function createIssueAction(data: z.infer<typeof createIssueSchema>)
       severity,
       priority,
       assigneeId,
+      image,
     } = parsed.data;
 
     // Verify project access
@@ -84,7 +92,7 @@ export async function createIssueAction(data: z.infer<typeof createIssueSchema>)
     });
     const nextNumber = (latestIssue?.number || 0) + 1;
 
-    // Create issue and history in transaction
+    // Create issue, attachment (if provided), and history in transaction
     const newIssue = await prisma.$transaction(async (tx) => {
       const issue = await tx.issue.create({
         data: {
@@ -104,10 +112,22 @@ export async function createIssueAction(data: z.infer<typeof createIssueSchema>)
         },
       });
 
+      if (image && image.fileUrl) {
+        await tx.attachment.create({
+          data: {
+            issueId: issue.id,
+            uploadedBy: session.user.id,
+            filename: image.filename,
+            fileUrl: image.fileUrl,
+            size: image.size,
+          },
+        });
+      }
+
       await writeIssueHistory(tx, issue.id, session.user.id, {
         fieldChanged: "created",
         oldValue: null,
-        newValue: "Issue created",
+        newValue: image ? `Issue created with attachment (${image.filename})` : "Issue created",
       });
 
       return issue;
@@ -410,6 +430,11 @@ export async function getIssueAuditHistoryAction(issueId: string) {
       },
     });
 
+    const attachments = await prisma.attachment.findMany({
+      where: { issueId },
+      orderBy: { uploadedAt: "desc" },
+    });
+
     return {
       success: true,
       data: {
@@ -426,6 +451,13 @@ export async function getIssueAuditHistoryAction(issueId: string) {
           body: c.body,
           createdAt: c.createdAt.toISOString(),
           user: c.user,
+        })),
+        attachments: attachments.map((a) => ({
+          id: a.id,
+          filename: a.filename,
+          fileUrl: a.fileUrl,
+          size: a.size,
+          uploadedAt: a.uploadedAt.toISOString(),
         })),
       },
     };

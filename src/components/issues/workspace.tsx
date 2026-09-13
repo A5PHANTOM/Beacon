@@ -32,6 +32,15 @@ export type WorkspaceIssue = {
   updatedAt: string;
   createdAt?: string;
   commentsCount: number;
+  attachmentsCount?: number;
+};
+
+export type IssueAttachmentItem = {
+  id: string;
+  filename: string;
+  fileUrl: string;
+  size: number;
+  uploadedAt: string;
 };
 
 export type ProjectMemberItem = {
@@ -160,6 +169,11 @@ export function IssueWorkspace({
   const [newAssigneeId, setNewAssigneeId] = useState("");
   const [createLoading, setCreateLoading] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
+  const [newImage, setNewImage] = useState<{
+    filename: string;
+    fileUrl: string;
+    size: number;
+  } | null>(null);
 
   // Drawer details & audit
   const [auditHistory, setAuditHistory] = useState<
@@ -180,6 +194,8 @@ export function IssueWorkspace({
       user: { id: string; name: string; email: string };
     }[]
   >([]);
+  const [attachments, setAttachments] = useState<IssueAttachmentItem[]>([]);
+  const [previewImage, setPreviewImage] = useState<{ url: string; filename: string } | null>(null);
   const [newComment, setNewComment] = useState("");
   const [commentLoading, setCommentLoading] = useState(false);
   const [transitionLoading, setTransitionLoading] = useState(false);
@@ -216,13 +232,14 @@ export function IssueWorkspace({
     }
   }, [initialIssues]);
 
-  // Load audit history & comments when drawer opens
+  // Load audit history, comments & attachments when drawer opens
   useEffect(() => {
     if (selected) {
       getIssueAuditHistoryAction(selected.id).then((res) => {
         if (res.success && res.data) {
           setAuditHistory(res.data.history);
           setComments(res.data.comments);
+          setAttachments(res.data.attachments || []);
         }
       });
     }
@@ -396,6 +413,61 @@ export function IssueWorkspace({
       .slice(0, 3);
   }, [issues]);
 
+  // Image upload handler with client-side compression
+  function handleImageUpload(file: File) {
+    if (!file.type.startsWith("image/")) {
+      setCreateError("Please upload a valid image file (PNG, JPG, WebP, GIF).");
+      return;
+    }
+    if (file.size > 8 * 1024 * 1024) {
+      setCreateError("Image size exceeds 8MB. Please select a smaller file.");
+      return;
+    }
+
+    setCreateError(null);
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const dataUrl = e.target?.result as string;
+      if (!dataUrl) return;
+
+      const img = new Image();
+      img.onload = () => {
+        const maxDim = 1280;
+        let { width, height } = img;
+        if (width > maxDim || height > maxDim) {
+          if (width > height) {
+            height = Math.round((height * maxDim) / width);
+            width = maxDim;
+          } else {
+            width = Math.round((width * maxDim) / height);
+            height = maxDim;
+          }
+        }
+        const canvas = document.createElement("canvas");
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext("2d");
+        if (ctx) {
+          ctx.drawImage(img, 0, 0, width, height);
+          const compressed = canvas.toDataURL("image/jpeg", 0.8);
+          setNewImage({
+            filename: file.name.replace(/\.[^/.]+$/, "") + ".jpg",
+            fileUrl: compressed,
+            size: Math.round(compressed.length * 0.75),
+          });
+        } else {
+          setNewImage({
+            filename: file.name,
+            fileUrl: dataUrl,
+            size: file.size,
+          });
+        }
+      };
+      img.src = dataUrl;
+    };
+    reader.readAsDataURL(file);
+  }
+
   // Handlers
   async function handleCreateIssue(e: FormEvent) {
     e.preventDefault();
@@ -422,6 +494,7 @@ export function IssueWorkspace({
       severity: newSev,
       priority: newPri,
       assigneeId: newAssigneeId,
+      image: newImage || undefined,
     });
 
     setCreateLoading(false);
@@ -436,6 +509,7 @@ export function IssueWorkspace({
       setNewExpected("");
       setNewActual("");
       setNewEnv("");
+      setNewImage(null);
       setNewAssigneeId(developers[0]?.userId || "");
       showToast("Draft issue created");
       router.refresh();
@@ -1047,8 +1121,26 @@ export function IssueWorkspace({
                 <span className="row-id mono">{issue.key}</span>
 
                 {/* Issue Title */}
-                <span className="row-title" title={issue.title}>
-                  {issue.title}
+                <span className="row-title" title={issue.title} style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                  <span>{issue.title}</span>
+                  {Boolean(issue.attachmentsCount && issue.attachmentsCount > 0) && (
+                    <span
+                      title={`${issue.attachmentsCount} attachment(s)`}
+                      style={{
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: 2,
+                        fontSize: 10,
+                        padding: "1px 5px",
+                        borderRadius: 4,
+                        background: "var(--surface-hover)",
+                        color: "var(--text-dim)",
+                        border: "1px solid var(--border)",
+                      }}
+                    >
+                      📎 {issue.attachmentsCount}
+                    </span>
+                  )}
                 </span>
 
                 {/* Tag / Environment */}
@@ -1513,6 +1605,60 @@ export function IssueWorkspace({
                 </div>
               )}
 
+              {/* Attachments & Screenshots */}
+              {attachments.length > 0 && (
+                <div style={{ marginTop: 16 }}>
+                  <div className="sec-title" style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+                      <circle cx="8.5" cy="8.5" r="1.5" />
+                      <polyline points="21 15 16 10 5 21" />
+                    </svg>
+                    <span>Attachments & Screenshots ({attachments.length})</span>
+                  </div>
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(130px, 1fr))", gap: 10, marginTop: 8 }}>
+                    {attachments.map((att) => (
+                      <div
+                        key={att.id}
+                        onClick={() => setPreviewImage({ url: att.fileUrl, filename: att.filename })}
+                        style={{
+                          background: "var(--surface-2)",
+                          border: "1px solid var(--border)",
+                          borderRadius: 8,
+                          overflow: "hidden",
+                          cursor: "pointer",
+                          transition: "transform 0.15s, border-color 0.15s",
+                        }}
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.transform = "translateY(-2px)";
+                          e.currentTarget.style.borderColor = "var(--accent)";
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.transform = "none";
+                          e.currentTarget.style.borderColor = "var(--border)";
+                        }}
+                      >
+                        <div style={{ width: "100%", height: 85, background: "rgba(0,0,0,0.04)", display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
+                          <img
+                            src={att.fileUrl}
+                            alt={att.filename}
+                            style={{ width: "100%", height: "100%", objectFit: "cover" }}
+                          />
+                        </div>
+                        <div style={{ padding: "6px 8px" }}>
+                          <div style={{ fontSize: 11, fontWeight: 600, color: "var(--text)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                            {att.filename}
+                          </div>
+                          <div style={{ fontSize: 10, color: "var(--text-faint)", marginTop: 1 }}>
+                            {(att.size / 1024).toFixed(0)} KB · Click to enlarge
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               {/* Activity / Audit Timeline */}
               <div className="sec-title">Activity</div>
               <div className="timeline" id="drawerTimeline">
@@ -1795,6 +1941,121 @@ export function IssueWorkspace({
                 />
               </div>
 
+              {/* Optional Screenshot / Proof Attachment */}
+              <div>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 4 }}>
+                  <label style={{ fontSize: 11, fontWeight: 700, color: "var(--text-dim)", textTransform: "uppercase" }}>
+                    Screenshot / Image Proof <span style={{ fontWeight: 400, opacity: 0.7 }}>(Optional)</span>
+                  </label>
+                  {newImage && (
+                    <button
+                      type="button"
+                      onClick={() => setNewImage(null)}
+                      style={{ background: "none", border: "none", color: "var(--crit)", fontSize: 11, cursor: "pointer", fontWeight: 600 }}
+                    >
+                      Remove image
+                    </button>
+                  )}
+                </div>
+
+                {!newImage ? (
+                  <label
+                    style={{
+                      display: "flex",
+                      flexDirection: "column",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      gap: 6,
+                      padding: "16px 14px",
+                      border: "1.5px dashed var(--border)",
+                      borderRadius: 8,
+                      background: "var(--surface-2)",
+                      cursor: "pointer",
+                      transition: "border-color 0.15s, background 0.15s",
+                      textAlign: "center",
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.borderColor = "var(--accent)";
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.borderColor = "var(--border)";
+                    }}
+                  >
+                    <input
+                      type="file"
+                      accept="image/*"
+                      style={{ display: "none" }}
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) handleImageUpload(file);
+                      }}
+                    />
+                    <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12.5, fontWeight: 600, color: "var(--text)" }}>
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+                        <circle cx="8.5" cy="8.5" r="1.5" />
+                        <polyline points="21 15 16 10 5 21" />
+                      </svg>
+                      <span>Upload Bug Screenshot</span>
+                    </div>
+                    <div style={{ fontSize: 11, color: "var(--text-faint)" }}>
+                      PNG, JPG, WebP up to 8MB · Click to browse
+                    </div>
+                  </label>
+                ) : (
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 12,
+                      padding: 8,
+                      background: "var(--surface-2)",
+                      border: "1px solid var(--border)",
+                      borderRadius: 8,
+                    }}
+                  >
+                    <img
+                      src={newImage.fileUrl}
+                      alt={newImage.filename}
+                      style={{
+                        width: 52,
+                        height: 52,
+                        objectFit: "cover",
+                        borderRadius: 6,
+                        border: "1px solid var(--border)",
+                      }}
+                    />
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 12.5, fontWeight: 600, color: "var(--text)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                        {newImage.filename}
+                      </div>
+                      <div style={{ fontSize: 11, color: "var(--text-faint)", marginTop: 2 }}>
+                        {(newImage.size / 1024).toFixed(1)} KB · Ready to attach
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setNewImage(null)}
+                      style={{
+                        background: "none",
+                        border: "none",
+                        color: "var(--text-dim)",
+                        cursor: "pointer",
+                        padding: 6,
+                        display: "flex",
+                        alignItems: "center",
+                      }}
+                      title="Remove image"
+                    >
+                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                        <line x1="18" y1="6" x2="6" y2="18" />
+                        <line x1="6" y1="6" x2="18" y2="18" />
+                      </svg>
+                    </button>
+                  </div>
+                )}
+              </div>
+
               <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, marginTop: 8 }}>
                 <button
                   type="button"
@@ -1984,6 +2245,79 @@ export function IssueWorkspace({
                 {transitionLoading ? "Saving…" : "Confirm Status Change"}
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* FULLSCREEN IMAGE LIGHTBOX MODAL */}
+      {previewImage && (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            zIndex: 9999,
+            backgroundColor: "rgba(0, 0, 0, 0.85)",
+            backdropFilter: "blur(8px)",
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: 24,
+          }}
+          onClick={() => setPreviewImage(null)}
+        >
+          <div
+            style={{
+              position: "relative",
+              maxWidth: "92vw",
+              maxHeight: "88vh",
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                width: "100%",
+                color: "#FFFFFF",
+                marginBottom: 10,
+                fontSize: 13,
+                fontWeight: 600,
+              }}
+            >
+              <span>{previewImage.filename}</span>
+              <button
+                type="button"
+                onClick={() => setPreviewImage(null)}
+                style={{
+                  background: "rgba(255, 255, 255, 0.2)",
+                  border: "none",
+                  color: "#FFFFFF",
+                  borderRadius: 6,
+                  padding: "5px 12px",
+                  cursor: "pointer",
+                  fontSize: 12,
+                  fontWeight: 600,
+                }}
+              >
+                Close ✕
+              </button>
+            </div>
+            <img
+              src={previewImage.url}
+              alt={previewImage.filename}
+              style={{
+                maxWidth: "100%",
+                maxHeight: "82vh",
+                objectFit: "contain",
+                borderRadius: 8,
+                boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.6)",
+              }}
+            />
           </div>
         </div>
       )}

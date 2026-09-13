@@ -63,7 +63,7 @@ export default async function ProjectIssuesPage({ params }: Props) {
         select: { name: true },
       },
       _count: {
-        select: { comments: true },
+        select: { comments: true, attachments: true },
       },
     },
   });
@@ -88,6 +88,7 @@ export default async function ProjectIssuesPage({ params }: Props) {
     updatedAt: i.updatedAt.toISOString(),
     createdAt: i.createdAt.toISOString(),
     commentsCount: i._count.comments,
+    attachmentsCount: i._count.attachments,
   }));
 
   const members: ProjectMemberItem[] = project.members.map((m) => ({

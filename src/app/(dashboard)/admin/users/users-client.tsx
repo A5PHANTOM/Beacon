@@ -6,12 +6,13 @@ import {
   Trash2,
   CheckCircle2,
   AlertCircle,
+  AlertTriangle,
   Code2,
   Bug,
   Shield,
   Layers,
 } from "lucide-react";
-import { createUserAction, deleteUserAction } from "./actions";
+import { createUserAction, deleteUserAction, checkEmailExistsAction } from "./actions";
 
 type UserItem = {
   id: string;
@@ -56,6 +57,36 @@ export function UsersClient({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const [serverEmailWarning, setServerEmailWarning] = useState<string | null>(null);
+
+  // Email format and uniqueness validation
+  const trimmedEmail = email.trim().toLowerCase();
+  const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9]+([.-][a-zA-Z0-9]+)*\.[a-zA-Z]{2,}$/;
+  const isEmailFormatValid = email.length === 0 || emailRegex.test(trimmedEmail);
+  const localDuplicateUser = trimmedEmail
+    ? users.find((u) => u.email.toLowerCase() === trimmedEmail)
+    : null;
+  const isEmailDuplicate = Boolean(localDuplicateUser || serverEmailWarning);
+
+  const handleEmailChange = (val: string) => {
+    setEmail(val);
+    if (serverEmailWarning) setServerEmailWarning(null);
+  };
+
+  const handleEmailBlur = async () => {
+    if (trimmedEmail && emailRegex.test(trimmedEmail) && !localDuplicateUser) {
+      try {
+        const res = await checkEmailExistsAction(trimmedEmail);
+        if (res?.exists) {
+          setServerEmailWarning(`A user with the email address "${trimmedEmail}" already exists in Beacon.`);
+        } else {
+          setServerEmailWarning(null);
+        }
+      } catch {
+        // network or auth error fallback
+      }
+    }
+  };
 
   const developerCount = users.filter((u) =>
     u.memberships.some((m) => m.roleInProject === "DEVELOPER")
@@ -69,6 +100,25 @@ export function UsersClient({
     e.preventDefault();
     setError(null);
     setSuccess(null);
+
+    // Validate email format and uniqueness before submitting
+    if (!email.trim()) {
+      setError("Email address is required.");
+      return;
+    }
+
+    if (!emailRegex.test(trimmedEmail)) {
+      setError("Please enter a valid email address format (e.g. name@company.com).");
+      return;
+    }
+
+    if (localDuplicateUser || serverEmailWarning) {
+      setError(
+        `Warning: A user with the email address "${trimmedEmail}" already exists. Duplicate emails cannot be used.`
+      );
+      return;
+    }
+
     setLoading(true);
 
     const globalRole = roleType === "ADMIN" ? "ADMIN" : "MEMBER";
@@ -76,8 +126,8 @@ export function UsersClient({
       roleType === "ADMIN" ? "LEAD" : roleType === "QA" ? "QA" : "DEVELOPER";
 
     const res = await createUserAction({
-      name,
-      email,
+      name: name.trim(),
+      email: trimmedEmail,
       password,
       role: globalRole,
       assignToProjectId: assignProjectId || undefined,
@@ -89,7 +139,7 @@ export function UsersClient({
     if (!res.success) {
       setError(res.error || "Failed to create user");
     } else {
-      setSuccess(`Account created for ${name} (${email})!`);
+      setSuccess(`Account created for ${name} (${trimmedEmail})!`);
       // Update local state
       const targetProj = projects.find((p) => p.id === assignProjectId);
       const newEntry: UserItem = {
@@ -114,6 +164,7 @@ export function UsersClient({
       setName("");
       setEmail("");
       setPassword("1234");
+      setServerEmailWarning(null);
       setTimeout(() => {
         setIsModalOpen(false);
         setSuccess(null);
@@ -398,17 +449,96 @@ export function UsersClient({
               </div>
 
               <div>
-                <label style={{ display: "block", fontSize: 11, fontWeight: 700, textTransform: "uppercase", color: "var(--text-dim)", marginBottom: 4 }}>
-                  Email Address
-                </label>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
+                  <label style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", color: "var(--text-dim)" }}>
+                    Email Address
+                  </label>
+                  {email.length > 0 && isEmailFormatValid && !isEmailDuplicate && (
+                    <span style={{ fontSize: 11, color: "var(--ok, #16a34a)", display: "flex", alignItems: "center", gap: 3, fontWeight: 600 }}>
+                      <CheckCircle2 className="h-3 w-3" /> Email available
+                    </span>
+                  )}
+                </div>
                 <input
                   type="email"
                   required
                   placeholder="e.g. jordan.dev@beacon.local"
                   value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  style={{ width: "100%", background: "var(--surface-2)", border: "1px solid var(--border)", borderRadius: 8, padding: "9px 12px", fontSize: 13, color: "var(--text)", outline: "none" }}
+                  onChange={(e) => handleEmailChange(e.target.value)}
+                  onBlur={handleEmailBlur}
+                  style={{
+                    width: "100%",
+                    background: "var(--surface-2)",
+                    border: isEmailDuplicate
+                      ? "1.5px solid var(--crit, #dc2626)"
+                      : !isEmailFormatValid && email.length > 0
+                      ? "1.5px solid #d97706"
+                      : "1px solid var(--border)",
+                    borderRadius: 8,
+                    padding: "9px 12px",
+                    fontSize: 13,
+                    color: "var(--text)",
+                    outline: "none",
+                    boxShadow: isEmailDuplicate
+                      ? "0 0 0 3px rgba(220, 38, 38, 0.12)"
+                      : !isEmailFormatValid && email.length > 0
+                      ? "0 0 0 3px rgba(217, 119, 6, 0.12)"
+                      : "none",
+                    transition: "border-color 0.15s, box-shadow 0.15s",
+                  }}
                 />
+
+                {/* Duplicate Email Warning Alert */}
+                {isEmailDuplicate && (
+                  <div
+                    style={{
+                      marginTop: 6,
+                      padding: "8px 10px",
+                      borderRadius: 6,
+                      background: "rgba(220, 38, 38, 0.08)",
+                      border: "1px solid rgba(220, 38, 38, 0.28)",
+                      display: "flex",
+                      alignItems: "flex-start",
+                      gap: 7,
+                      fontSize: 12,
+                      color: "var(--crit, #dc2626)",
+                      lineHeight: 1.4,
+                    }}
+                  >
+                    <AlertTriangle className="h-4 w-4 shrink-0" style={{ marginTop: 1, color: "var(--crit, #dc2626)" }} />
+                    <div>
+                      <strong style={{ display: "block", marginBottom: 2 }}>
+                        Warning: Email already registered!
+                      </strong>
+                      <span>
+                        {localDuplicateUser
+                          ? `An account already exists for "${localDuplicateUser.name}" with the email "${localDuplicateUser.email}". Duplicate emails cannot be used.`
+                          : serverEmailWarning || `The email "${trimmedEmail}" is already registered. Duplicate emails cannot be used.`}
+                      </span>
+                    </div>
+                  </div>
+                )}
+
+                {/* Format Validation Warning */}
+                {!isEmailFormatValid && email.length > 0 && !isEmailDuplicate && (
+                  <div
+                    style={{
+                      marginTop: 6,
+                      padding: "6px 10px",
+                      borderRadius: 6,
+                      background: "rgba(217, 119, 6, 0.08)",
+                      border: "1px solid rgba(217, 119, 6, 0.25)",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 6,
+                      fontSize: 12,
+                      color: "#b45309",
+                    }}
+                  >
+                    <AlertCircle className="h-3.5 w-3.5 shrink-0" />
+                    <span>Please enter a valid email format (e.g. <code>name@company.com</code>).</span>
+                  </div>
+                )}
               </div>
 
               <div>
@@ -516,9 +646,20 @@ export function UsersClient({
                 </button>
                 <button
                   type="submit"
-                  disabled={loading}
+                  disabled={loading || isEmailDuplicate || !isEmailFormatValid || !name.trim() || !email.trim()}
                   className="btn-primary"
-                  style={{ margin: 0 }}
+                  title={
+                    isEmailDuplicate
+                      ? "Cannot create account: email address is already in use"
+                      : !isEmailFormatValid
+                      ? "Cannot create account: invalid email address format"
+                      : undefined
+                  }
+                  style={{
+                    margin: 0,
+                    opacity: (loading || isEmailDuplicate || !isEmailFormatValid || !name.trim() || !email.trim()) ? 0.55 : 1,
+                    cursor: (loading || isEmailDuplicate || !isEmailFormatValid || !name.trim() || !email.trim()) ? "not-allowed" : "pointer",
+                  }}
                 >
                   {loading ? "Creating…" : "Create Account"}
                 </button>
