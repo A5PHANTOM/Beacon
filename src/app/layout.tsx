@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 import { AuthProvider } from "@/components/providers/session-provider";
 import { InteractiveEffects } from "@/components/ui/interactive-effects";
+import { Analytics } from "@vercel/analytics/next";
 
 export const metadata: Metadata = {
   title: "Beacon — Workspace",
@@ -26,6 +27,7 @@ export default function RootLayout({
         <AuthProvider>
           <InteractiveEffects />
           {children}
+          <Analytics />
         </AuthProvider>
       </body>
     </html>
