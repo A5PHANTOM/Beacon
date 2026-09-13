@@ -496,8 +496,11 @@ export default function LoginPage() {
   return (
     <Suspense
       fallback={
-        <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", backgroundColor: "#F8FAFC", color: "#64748B", fontSize: 14 }}>
-          Loading…
+        <div style={{ minHeight: "100vh", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", backgroundColor: "#F8FAFC", color: "#64748B", fontSize: 14 }}>
+          <div>Loading…</div>
+          <div style={{ marginTop: 18, fontSize: 12, color: "#94A3B8" }}>
+            Developed by <span style={{ fontWeight: 700, color: "#475569" }}>A5PHANTOM</span>
+          </div>
         </div>
       }
     >
@@ -512,6 +515,7 @@ function LoginPageContent() {
       style={{
         minHeight: "100vh",
         display: "flex",
+        flexDirection: "column",
         alignItems: "center",
         justifyContent: "center",
         backgroundColor: "#F8FAFC",
@@ -522,6 +526,20 @@ function LoginPageContent() {
       }}
     >
       <LoginForm />
+      <div
+        style={{
+          marginTop: 18,
+          textAlign: "center",
+          fontSize: 12,
+          color: "#94A3B8",
+          letterSpacing: "0.01em",
+        }}
+      >
+        Developed by{" "}
+        <span style={{ fontWeight: 700, color: "#475569", letterSpacing: "0.03em" }}>
+          A5PHANTOM
+        </span>
+      </div>
     </div>
   );
 }
