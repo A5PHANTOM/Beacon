@@ -6,6 +6,7 @@ import { signOut, useSession } from "next-auth/react";
 import {
   FolderKanban,
   Users,
+  HardDrive,
   LogOut,
   ChevronDown,
   Layers,
@@ -124,17 +125,30 @@ export function Navbar({
             </Link>
 
             {isAdmin && (
-              <Link
-                href="/admin/users"
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition ${
-                  pathname.startsWith("/admin")
-                    ? "bg-indigo-50 text-indigo-700 font-semibold"
-                    : "text-slate-600 hover:text-slate-900 hover:bg-slate-50"
-                }`}
-              >
-                <Users className="h-4 w-4" />
-                Team & Users (Admin)
-              </Link>
+              <>
+                <Link
+                  href="/admin/users"
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition ${
+                    pathname.startsWith("/admin/users")
+                      ? "bg-indigo-50 text-indigo-700 font-semibold"
+                      : "text-slate-600 hover:text-slate-900 hover:bg-slate-50"
+                  }`}
+                >
+                  <Users className="h-4 w-4" />
+                  Users
+                </Link>
+                <Link
+                  href="/admin/usage"
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition ${
+                    pathname.startsWith("/admin/usage")
+                      ? "bg-indigo-50 text-indigo-700 font-semibold"
+                      : "text-slate-600 hover:text-slate-900 hover:bg-slate-50"
+                  }`}
+                >
+                  <HardDrive className="h-4 w-4" />
+                  Usage
+                </Link>
+              </>
             )}
           </nav>
         </div>
@@ -175,14 +189,24 @@ export function Navbar({
                   </div>
 
                   {isAdmin && (
-                    <Link
-                      href="/admin/users"
-                      onClick={() => setUserMenuOpen(false)}
-                      className="flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50 transition"
-                    >
-                      <Users className="h-3.5 w-3.5 text-slate-500" />
-                      Manage Users & Accounts
-                    </Link>
+                    <>
+                      <Link
+                        href="/admin/users"
+                        onClick={() => setUserMenuOpen(false)}
+                        className="flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50 transition"
+                      >
+                        <Users className="h-3.5 w-3.5 text-slate-500" />
+                        Manage Users & Accounts
+                      </Link>
+                      <Link
+                        href="/admin/usage"
+                        onClick={() => setUserMenuOpen(false)}
+                        className="flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50 transition"
+                      >
+                        <HardDrive className="h-3.5 w-3.5 text-slate-500" />
+                        Usage & Storage Center
+                      </Link>
+                    </>
                   )}
 
                   <Link

@@ -245,19 +245,33 @@ export function AppShell({
           </Link>
 
           {isAdmin && (
-            <Link
-              href="/admin/users"
-              className={`nav-item ${pathname.startsWith("/admin") ? "active" : ""}`}
-              title="Team & Accounts"
-            >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2" />
-                <circle cx="9" cy="7" r="4" />
-                <path d="M23 21v-2a4 4 0 00-3-3.87" />
-                <path d="M16 3.13a4 4 0 010 7.75" />
-              </svg>
-              <span className="nav-label">Team & Admin</span>
-            </Link>
+            <>
+              <Link
+                href="/admin/users"
+                className={`nav-item ${pathname.startsWith("/admin/users") ? "active" : ""}`}
+                title="Team & Accounts"
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2" />
+                  <circle cx="9" cy="7" r="4" />
+                  <path d="M23 21v-2a4 4 0 00-3-3.87" />
+                  <path d="M16 3.13a4 4 0 010 7.75" />
+                </svg>
+                <span className="nav-label">Team & Users</span>
+              </Link>
+              <Link
+                href="/admin/usage"
+                className={`nav-item ${pathname.startsWith("/admin/usage") ? "active" : ""}`}
+                title="Storage & Resource Usage"
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <ellipse cx="12" cy="5" rx="9" ry="3" />
+                  <path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3" />
+                  <path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5" />
+                </svg>
+                <span className="nav-label">Usage</span>
+              </Link>
+            </>
           )}
         </div>
 
@@ -290,13 +304,22 @@ export function AppShell({
               </div>
 
               {isAdmin && (
-                <Link
-                  href="/admin/users"
-                  onClick={() => setUserMenuOpen(false)}
-                  className="flex items-center gap-2 rounded-lg px-3 py-1.5 text-xs text-[var(--text)] hover:bg-[var(--surface-hover)] transition"
-                >
-                  Manage Users & Accounts
-                </Link>
+                <>
+                  <Link
+                    href="/admin/users"
+                    onClick={() => setUserMenuOpen(false)}
+                    className="flex items-center gap-2 rounded-lg px-3 py-1.5 text-xs text-[var(--text)] hover:bg-[var(--surface-hover)] transition"
+                  >
+                    Manage Users & Accounts
+                  </Link>
+                  <Link
+                    href="/admin/usage"
+                    onClick={() => setUserMenuOpen(false)}
+                    className="flex items-center gap-2 rounded-lg px-3 py-1.5 text-xs text-[var(--text)] hover:bg-[var(--surface-hover)] transition"
+                  >
+                    Storage Usage & Cleanup
+                  </Link>
+                </>
               )}
 
               <button
@@ -318,6 +341,10 @@ export function AppShell({
           <div className="crumb">
             {pathname === "/projects" ? (
               <><b>Workspace</b> / Projects</>
+            ) : pathname.startsWith("/admin/usage") ? (
+              <><b>Admin Console</b> / Storage Usage</>
+            ) : pathname.startsWith("/admin") ? (
+              <><b>Admin Console</b> / Team & Users</>
             ) : (
               <><b>{currentProject.name}</b> / {currentProject.key}</>
             )}

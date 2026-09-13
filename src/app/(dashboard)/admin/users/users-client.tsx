@@ -1,8 +1,11 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import {
   UserPlus,
+  Users,
+  HardDrive,
   Trash2,
   CheckCircle2,
   AlertCircle,
@@ -187,6 +190,58 @@ export function UsersClient({
 
   return (
     <div className="page" style={{ maxWidth: 1200, margin: "0 auto" }}>
+      {/* Admin Navbar Tabs */}
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 8,
+          borderBottom: "1px solid var(--border)",
+          marginBottom: 24,
+          paddingBottom: 10,
+        }}
+      >
+        <Link
+          href="/admin/users"
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 7,
+            padding: "7px 15px",
+            borderRadius: 8,
+            fontSize: 13,
+            fontWeight: 700,
+            textDecoration: "none",
+            background: "var(--accent-soft)",
+            color: "var(--accent)",
+            border: "1px solid var(--accent)",
+          }}
+        >
+          <Users className="h-4 w-4" />
+          <span>Team & Users</span>
+        </Link>
+        <Link
+          href="/admin/usage"
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 7,
+            padding: "7px 15px",
+            borderRadius: 8,
+            fontSize: 13,
+            fontWeight: 600,
+            textDecoration: "none",
+            background: "transparent",
+            color: "var(--text-dim)",
+            border: "1px solid transparent",
+            transition: "all 0.15s ease",
+          }}
+        >
+          <HardDrive className="h-4 w-4" />
+          <span>Usage & Storage</span>
+        </Link>
+      </div>
+
       {/* Header */}
       <div className="dash-head" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 16 }}>
         <div>
