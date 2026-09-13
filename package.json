@@ -3,12 +3,12 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
-    "build": "next build --webpack",
+    "dev": "node scripts/prepare-prisma.js && next dev",
+    "build": "node scripts/prepare-prisma.js && prisma generate && node scripts/db-sync.js && next build --webpack",
     "start": "next start",
     "lint": "eslint",
-    "postinstall": "prisma generate",
-    "db:push": "prisma db push",
+    "postinstall": "node scripts/prepare-prisma.js && prisma generate",
+    "db:push": "node scripts/prepare-prisma.js && prisma db push",
     "db:seed": "npx -y tsx prisma/seed.ts"
   },
   "dependencies": {

