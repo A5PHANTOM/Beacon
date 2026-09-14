@@ -58,49 +58,78 @@ const columnDefs: {
   emptyAction?: string;
 }[] = [
   {
-    status: "REPORTED",
-    name: "Reported",
-    dotColor: "#8A93A6",
-    emptyPrompt: "Nothing waiting on a call",
+    status: "OPEN",
+    name: "Open",
+    dotColor: "#3B82F6",
+    emptyPrompt: "No open issues",
     emptyAction: "Report an issue",
   },
   {
-    status: "TRIAGED",
-    name: "Triaged",
-    dotColor: "#8B6FE0",
-    emptyPrompt: "Nothing waiting on a call",
-    emptyAction: "Triage the queue",
+    status: "READY_FOR_DEV",
+    name: "Ready for Dev",
+    dotColor: "#06B6D4",
+    emptyPrompt: "No issues ready for dev",
   },
   {
-    status: "IN_PROGRESS",
-    name: "In Progress",
-    dotColor: "#3E8FE0",
+    status: "DEV_IN_PROGRESS",
+    name: "Dev In Progress",
+    dotColor: "#6366F1",
     emptyPrompt: "No active developer work",
     emptyAction: "Pick up a task",
   },
   {
-    status: "FIXED",
-    name: "Fixed",
-    dotColor: "#16A34A",
-    emptyPrompt: "No fixes pending verification",
+    status: "DEV_REVIEW",
+    name: "Dev Review",
+    dotColor: "#8B5CF6",
+    emptyPrompt: "No issues under review",
   },
   {
-    status: "VERIFIED",
-    name: "Verified",
-    dotColor: "#1FA396",
-    emptyPrompt: "Verify a fix to close the loop",
+    status: "DEV_COMPLETED",
+    name: "Dev Completed",
+    dotColor: "#10B981",
+    emptyPrompt: "No completed dev tasks",
+  },
+  {
+    status: "DEV_DEPLOYED",
+    name: "Dev Deployed",
+    dotColor: "#14B8A6",
+    emptyPrompt: "No dev deployments",
+  },
+  {
+    status: "QA_IN_PROGRESS",
+    name: "QA In Progress",
+    dotColor: "#F59E0B",
+    emptyPrompt: "No QA testing in progress",
+  },
+  {
+    status: "QA_DEPLOYED",
+    name: "QA Deployed",
+    dotColor: "#10B981",
+    emptyPrompt: "No QA deployments",
+  },
+  {
+    status: "READY_FOR_RELEASE",
+    name: "Ready for Release",
+    dotColor: "#EC4899",
+    emptyPrompt: "No issues ready for release",
+  },
+  {
+    status: "PROD_DEPLOYED",
+    name: "Prod Deployed",
+    dotColor: "#059669",
+    emptyPrompt: "No prod deployments",
   },
   {
     status: "CLOSED",
     name: "Closed",
-    dotColor: "#A9B0C0",
+    dotColor: "#64748B",
     emptyPrompt: "Closed issues will land here",
   },
   {
-    status: "REJECTED",
-    name: "Rejected (Problem not found)",
-    dotColor: "#DC2626",
-    emptyPrompt: "No rejected issues",
+    status: "INVALID",
+    name: "Invalid",
+    dotColor: "#EF4444",
+    emptyPrompt: "No invalid issues",
   },
 ];
 
@@ -263,21 +292,69 @@ export function IssueWorkspace({
     if (isTester) {
       return [];
     }
-    // Developer must have dropdown options: in progress, fixed, rejected as problem not found
-    const devOptions: IssueStatus[] = ["IN_PROGRESS", "FIXED", "REJECTED"];
-    return devOptions.filter((target) => target !== issue.status);
+    // Pipeline statuses from workflow
+    const allPipelineStatuses: IssueStatus[] = [
+      "OPEN",
+      "READY_FOR_DEV",
+      "DEV_IN_PROGRESS",
+      "DEV_REVIEW",
+      "DEV_COMPLETED",
+      "DEV_DEPLOYED",
+      "QA_IN_PROGRESS",
+      "QA_DEPLOYED",
+      "READY_FOR_RELEASE",
+      "PROD_DEPLOYED",
+      "CLOSED",
+      "INVALID",
+    ];
+
+    return allPipelineStatuses.filter((target) => {
+      if (target === issue.status) return false;
+      if (issue.status === "REPORTED" && target === "OPEN") return false;
+      if (issue.status === "IN_PROGRESS" && target === "DEV_IN_PROGRESS") return false;
+      if (issue.status === "FIXED" && target === "DEV_COMPLETED") return false;
+      if (issue.status === "REJECTED" && target === "INVALID") return false;
+      return true;
+    });
   }
 
   // Status display label helper
   function getStatusLabel(status: string) {
-    if (status === "REJECTED") return "Rejected (Problem not found)";
-    if (status === "IN_PROGRESS") return "In Progress";
-    if (status === "REPORTED") return "Reported";
-    if (status === "TRIAGED") return "Triaged";
-    if (status === "FIXED") return "Fixed";
-    if (status === "VERIFIED") return "Verified";
-    if (status === "CLOSED") return "Closed";
-    return status.replace("_", " ");
+    switch (status) {
+      case "OPEN":
+      case "REPORTED":
+        return "Open";
+      case "READY_FOR_DEV":
+      case "TRIAGED":
+        return "Ready for Dev";
+      case "DEV_IN_PROGRESS":
+      case "IN_PROGRESS":
+        return "Dev In Progress";
+      case "DEV_REVIEW":
+        return "Dev Review";
+      case "DEV_COMPLETED":
+        return "Dev Completed";
+      case "DEV_DEPLOYED":
+        return "Dev Deployed";
+      case "QA_IN_PROGRESS":
+        return "QA In Progress";
+      case "QA_DEPLOYED":
+      case "VERIFIED":
+        return "QA Deployed";
+      case "READY_FOR_RELEASE":
+        return "Ready for Release";
+      case "PROD_DEPLOYED":
+        return "Prod Deployed";
+      case "CLOSED":
+        return "Closed";
+      case "INVALID":
+      case "REJECTED":
+        return "Invalid";
+      case "FIXED":
+        return "Dev Completed";
+      default:
+        return status.replace(/_/g, " ");
+    }
   }
 
   // Helper for priority color class
@@ -289,9 +366,40 @@ export function IssueWorkspace({
 
   // Helper for status dot color
   function getStatusDotColor(status: IssueStatus | string) {
-    if (status === "REJECTED") return "#DC2626";
-    const col = columnDefs.find((c) => c.status === status);
-    return col?.dotColor || "#8A93A6";
+    switch (status) {
+      case "OPEN":
+      case "REPORTED":
+        return "#3B82F6";
+      case "READY_FOR_DEV":
+      case "TRIAGED":
+        return "#06B6D4";
+      case "DEV_IN_PROGRESS":
+      case "IN_PROGRESS":
+        return "#6366F1";
+      case "DEV_REVIEW":
+        return "#8B5CF6";
+      case "DEV_COMPLETED":
+      case "FIXED":
+        return "#10B981";
+      case "DEV_DEPLOYED":
+        return "#14B8A6";
+      case "QA_IN_PROGRESS":
+        return "#F59E0B";
+      case "QA_DEPLOYED":
+      case "VERIFIED":
+        return "#10B981";
+      case "READY_FOR_RELEASE":
+        return "#EC4899";
+      case "PROD_DEPLOYED":
+        return "#059669";
+      case "CLOSED":
+        return "#64748B";
+      case "INVALID":
+      case "REJECTED":
+        return "#EF4444";
+      default:
+        return "#8A93A6";
+    }
   }
 
   // Helper for friendly relative timestamps (e.g. 2h ago, 1d ago)
@@ -341,9 +449,17 @@ export function IssueWorkspace({
       const matchesStatus =
         filterStatus === "ALL" ||
         (filterStatus === "OPEN"
-          ? !["FIXED", "VERIFIED", "CLOSED"].includes(issue.status)
+          ? ["OPEN", "REPORTED", "READY_FOR_DEV"].includes(issue.status)
+          : filterStatus === "DEV_IN_PROGRESS"
+          ? ["DEV_IN_PROGRESS", "IN_PROGRESS"].includes(issue.status)
+          : filterStatus === "DEV_COMPLETED"
+          ? ["DEV_COMPLETED", "FIXED"].includes(issue.status)
+          : filterStatus === "QA_DEPLOYED"
+          ? ["QA_DEPLOYED", "VERIFIED"].includes(issue.status)
+          : filterStatus === "INVALID"
+          ? ["INVALID", "REJECTED"].includes(issue.status)
           : filterStatus === "RESOLVED"
-          ? ["FIXED", "VERIFIED", "CLOSED"].includes(issue.status)
+          ? ["FIXED", "DEV_COMPLETED", "DEV_DEPLOYED", "QA_DEPLOYED", "READY_FOR_RELEASE", "PROD_DEPLOYED", "VERIFIED", "CLOSED"].includes(issue.status)
           : issue.status === filterStatus);
       const matchesMyTasks = !myTasksOnly || issue.assigneeId === currentUser.id;
 
@@ -374,12 +490,14 @@ export function IssueWorkspace({
   // Metrics
   const totalIssuesCount = issues.length;
   const openIssuesCount = issues.filter(
-    (i) => !["FIXED", "VERIFIED", "CLOSED"].includes(i.status)
+    (i) => !["CLOSED", "INVALID", "REJECTED", "PROD_DEPLOYED", "FIXED", "VERIFIED"].includes(i.status)
   ).length;
   const criticalIssuesCount = issues.filter((i) => i.severity === "CRITICAL").length;
-  const inProgressCount = issues.filter((i) => i.status === "IN_PROGRESS").length;
+  const inProgressCount = issues.filter(
+    (i) => ["DEV_IN_PROGRESS", "IN_PROGRESS", "DEV_REVIEW", "QA_IN_PROGRESS"].includes(i.status)
+  ).length;
   const resolvedCount = issues.filter((i) =>
-    ["FIXED", "VERIFIED", "CLOSED"].includes(i.status)
+    ["FIXED", "VERIFIED", "DEV_COMPLETED", "DEV_DEPLOYED", "QA_DEPLOYED", "READY_FOR_RELEASE", "PROD_DEPLOYED", "CLOSED"].includes(i.status)
   ).length;
   const solveRate =
     totalIssuesCount > 0 ? Math.round((resolvedCount / totalIssuesCount) * 100) : 0;
@@ -990,16 +1108,19 @@ export function IssueWorkspace({
             value={filterStatus}
             onChange={(e) => setFilterStatus(e.target.value)}
           >
-            <option value="ALL">All issues raised ({totalIssuesCount})</option>
-            <option value="OPEN">All open issues ({openIssuesCount})</option>
-            <option value="RESOLVED">All issues covered ({resolvedCount})</option>
-            <option value="REPORTED">Reported</option>
-            <option value="TRIAGED">Triaged</option>
-            <option value="IN_PROGRESS">In Progress</option>
-            <option value="FIXED">Fixed</option>
-            <option value="VERIFIED">Verified</option>
+            <option value="ALL">All Status ({totalIssuesCount})</option>
+            <option value="OPEN">Open</option>
+            <option value="READY_FOR_DEV">Ready for Dev</option>
+            <option value="DEV_IN_PROGRESS">Dev In Progress</option>
+            <option value="DEV_REVIEW">Dev Review</option>
+            <option value="DEV_COMPLETED">Dev Completed</option>
+            <option value="DEV_DEPLOYED">Dev Deployed</option>
+            <option value="QA_IN_PROGRESS">QA In Progress</option>
+            <option value="QA_DEPLOYED">QA Deployed</option>
+            <option value="READY_FOR_RELEASE">Ready for Release</option>
+            <option value="PROD_DEPLOYED">Prod Deployed</option>
             <option value="CLOSED">Closed</option>
-            <option value="REJECTED">Rejected</option>
+            <option value="INVALID">Invalid</option>
           </select>
           <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
             <path d="M6 9l6 6 6-6" />
@@ -1585,21 +1706,29 @@ export function IssueWorkspace({
 
               {/* Expected & Actual */}
               {(selected.expected || selected.actual) && (
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginTop: 14 }}>
+                <div style={{ display: "grid", gridTemplateColumns: selected.expected && selected.actual ? "1fr 1fr" : "1fr", gap: 10, marginTop: 14 }}>
                   {selected.expected && (
-                    <div style={{ background: "var(--ok-soft)", padding: 10, borderRadius: 8 }}>
-                      <div style={{ fontSize: 10.5, fontWeight: 700, color: "var(--ok)", textTransform: "uppercase" }}>
+                    <div style={{ background: "var(--ok-soft)", border: "1px solid var(--ok-bd, rgba(52, 211, 153, 0.2))", padding: 12, borderRadius: 8 }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 10.5, fontWeight: 700, color: "var(--ok)", textTransform: "uppercase" }}>
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                          <polyline points="20 6 9 17 4 12" />
+                        </svg>
                         Expected Result
                       </div>
-                      <div style={{ fontSize: 12, marginTop: 3 }}>{selected.expected}</div>
+                      <div style={{ fontSize: 12.5, marginTop: 4, lineHeight: 1.5, whiteSpace: "pre-wrap" }}>{selected.expected}</div>
                     </div>
                   )}
                   {selected.actual && (
-                    <div style={{ background: "var(--crit-soft)", padding: 10, borderRadius: 8 }}>
-                      <div style={{ fontSize: 10.5, fontWeight: 700, color: "var(--crit)", textTransform: "uppercase" }}>
+                    <div style={{ background: "var(--crit-soft)", border: "1px solid var(--crit-bd, rgba(239, 68, 68, 0.2))", padding: 12, borderRadius: 8 }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 10.5, fontWeight: 700, color: "var(--crit)", textTransform: "uppercase" }}>
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                          <circle cx="12" cy="12" r="10" />
+                          <line x1="15" y1="9" x2="9" y2="15" />
+                          <line x1="9" y1="9" x2="15" y2="15" />
+                        </svg>
                         Actual Result
                       </div>
-                      <div style={{ fontSize: 12, marginTop: 3 }}>{selected.actual}</div>
+                      <div style={{ fontSize: 12.5, marginTop: 4, lineHeight: 1.5, whiteSpace: "pre-wrap" }}>{selected.actual}</div>
                     </div>
                   )}
                 </div>
@@ -1796,7 +1925,11 @@ export function IssueWorkspace({
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
-            padding: 16,
+            padding: "24px 16px",
+            overflowY: "auto",
+          }}
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setIsNewOpen(false);
           }}
         >
           <div
@@ -1807,14 +1940,28 @@ export function IssueWorkspace({
               border: "1px solid var(--border)",
               borderRadius: 14,
               boxShadow: "var(--shadow-lg)",
-              padding: 24,
-              maxHeight: "90vh",
-              overflowY: "auto",
+              maxHeight: "min(90vh, 780px)",
+              display: "flex",
+              flexDirection: "column",
+              margin: "auto",
+              overflow: "hidden",
             }}
+            onClick={(e) => e.stopPropagation()}
           >
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16, borderBottom: "1px solid var(--border)", paddingBottom: 12 }}>
+            {/* Docked Header */}
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                padding: "16px 22px 14px",
+                borderBottom: "1px solid var(--border)",
+                flexShrink: 0,
+                background: "var(--surface)",
+              }}
+            >
               <div>
-                <h3 style={{ margin: 0, fontSize: 17, fontWeight: 800 }}>
+                <h3 style={{ margin: 0, fontSize: 16, fontWeight: 800 }}>
                   Report New Issue in [{project.key}]
                 </h3>
                 <p style={{ margin: "2px 0 0", fontSize: 12, color: "var(--text-faint)" }}>
@@ -1830,15 +1977,23 @@ export function IssueWorkspace({
               </button>
             </div>
 
-            {createError && (
-              <div style={{ background: "var(--crit-soft)", border: "1px solid var(--crit-bd)", color: "var(--crit)", padding: "8px 12px", borderRadius: 8, fontSize: 12, marginBottom: 14 }}>
-                {createError}
-              </div>
-            )}
+            {/* Scrollable Form Body */}
+            <div
+              style={{
+                padding: "18px 22px",
+                overflowY: "auto",
+                flex: 1,
+              }}
+            >
+              {createError && (
+                <div style={{ background: "var(--crit-soft)", border: "1px solid var(--crit-bd)", color: "var(--crit)", padding: "8px 12px", borderRadius: 8, fontSize: 12, marginBottom: 14 }}>
+                  {createError}
+                </div>
+              )}
 
-            <form onSubmit={handleCreateIssue} style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-              <div>
-                <label style={{ display: "block", fontSize: 11, fontWeight: 700, color: "var(--text-dim)", textTransform: "uppercase", marginBottom: 4 }}>
+              <form id="createIssueForm" onSubmit={handleCreateIssue} style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+                <div>
+                  <label style={{ display: "block", fontSize: 11, fontWeight: 700, color: "var(--text-dim)", textTransform: "uppercase", marginBottom: 4 }}>
                   Title *
                 </label>
                 <input
@@ -1938,6 +2093,110 @@ export function IssueWorkspace({
                   value={newSteps}
                   onChange={(e) => setNewSteps(e.target.value)}
                   style={{ width: "100%", background: "var(--surface-2)", border: "1px solid var(--border)", borderRadius: 8, padding: "9px 12px", fontSize: 12, color: "var(--text)", outline: "none", fontFamily: "'IBM Plex Mono', monospace" }}
+                />
+              </div>
+
+              {/* Expected & Actual Results */}
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+                <div>
+                  <label
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 5,
+                      fontSize: 11,
+                      fontWeight: 700,
+                      color: "var(--ok)",
+                      textTransform: "uppercase",
+                      marginBottom: 4,
+                    }}
+                  >
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                      <polyline points="20 6 9 17 4 12" />
+                    </svg>
+                    Expected Result
+                  </label>
+                  <textarea
+                    rows={3}
+                    placeholder="What should have happened? (e.g. Success banner displays with confirmation ID)"
+                    value={newExpected}
+                    onChange={(e) => setNewExpected(e.target.value)}
+                    style={{
+                      width: "100%",
+                      background: "var(--surface-2)",
+                      border: "1px solid var(--border)",
+                      borderRadius: 8,
+                      padding: "9px 12px",
+                      fontSize: 12,
+                      color: "var(--text)",
+                      outline: "none",
+                      resize: "none",
+                      fontFamily: "inherit",
+                    }}
+                  />
+                </div>
+
+                <div>
+                  <label
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 5,
+                      fontSize: 11,
+                      fontWeight: 700,
+                      color: "var(--crit)",
+                      textTransform: "uppercase",
+                      marginBottom: 4,
+                    }}
+                  >
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                      <circle cx="12" cy="12" r="10" />
+                      <line x1="15" y1="9" x2="9" y2="15" />
+                      <line x1="9" y1="9" x2="15" y2="15" />
+                    </svg>
+                    Actual Result
+                  </label>
+                  <textarea
+                    rows={3}
+                    placeholder="What actually happened instead? (e.g. Spinner froze and unhandled error logged)"
+                    value={newActual}
+                    onChange={(e) => setNewActual(e.target.value)}
+                    style={{
+                      width: "100%",
+                      background: "var(--surface-2)",
+                      border: "1px solid var(--border)",
+                      borderRadius: 8,
+                      padding: "9px 12px",
+                      fontSize: 12,
+                      color: "var(--text)",
+                      outline: "none",
+                      resize: "none",
+                      fontFamily: "inherit",
+                    }}
+                  />
+                </div>
+              </div>
+
+              {/* Environment (Optional) */}
+              <div>
+                <label style={{ display: "block", fontSize: 11, fontWeight: 700, color: "var(--text-dim)", textTransform: "uppercase", marginBottom: 4 }}>
+                  Environment <span style={{ fontWeight: 400, opacity: 0.7 }}>(Optional)</span>
+                </label>
+                <input
+                  type="text"
+                  placeholder="e.g. Chrome 128 / macOS, Staging v2.1"
+                  value={newEnv}
+                  onChange={(e) => setNewEnv(e.target.value)}
+                  style={{
+                    width: "100%",
+                    background: "var(--surface-2)",
+                    border: "1px solid var(--border)",
+                    borderRadius: 8,
+                    padding: "9px 12px",
+                    fontSize: 12.5,
+                    color: "var(--text)",
+                    outline: "none",
+                  }}
                 />
               </div>
 
@@ -2056,24 +2315,39 @@ export function IssueWorkspace({
                 )}
               </div>
 
-              <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, marginTop: 8 }}>
-                <button
-                  type="button"
-                  onClick={() => setIsNewOpen(false)}
-                  style={{ background: "none", border: "1px solid var(--border)", borderRadius: 8, padding: "8px 14px", fontSize: 12.5, color: "var(--text-dim)", cursor: "pointer" }}
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={createLoading}
-                  className="btn-primary"
-                  style={{ margin: 0 }}
-                >
-                  {createLoading ? "Creating…" : "Create Issue"}
-                </button>
-              </div>
-            </form>
+                </form>
+            </div>
+
+            {/* Docked Footer Actions */}
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "flex-end",
+                gap: 10,
+                padding: "12px 22px",
+                borderTop: "1px solid var(--border)",
+                background: "var(--surface)",
+                flexShrink: 0,
+              }}
+            >
+              <button
+                type="button"
+                onClick={() => setIsNewOpen(false)}
+                style={{ background: "none", border: "1px solid var(--border)", borderRadius: 8, padding: "8px 14px", fontSize: 12.5, color: "var(--text-dim)", cursor: "pointer" }}
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                form="createIssueForm"
+                disabled={createLoading}
+                className="btn-primary"
+                style={{ margin: 0 }}
+              >
+                {createLoading ? "Creating…" : "Create Issue"}
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -2089,7 +2363,8 @@ export function IssueWorkspace({
             alignItems: "center",
             justifyContent: "center",
             zIndex: 80,
-            padding: 16,
+            padding: "24px 16px",
+            overflowY: "auto",
           }}
           onClick={() => setStatusNoteModal(null)}
         >
@@ -2102,6 +2377,9 @@ export function IssueWorkspace({
               borderRadius: 14,
               boxShadow: "var(--shadow-lg)",
               padding: "22px 24px",
+              margin: "auto",
+              maxHeight: "90vh",
+              overflowY: "auto",
             }}
             onClick={(e) => e.stopPropagation()}
           >

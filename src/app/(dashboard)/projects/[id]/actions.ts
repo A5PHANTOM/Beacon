@@ -182,13 +182,29 @@ export async function updateIssueStatusAction(
       };
     }
 
-    // DEVELOPER can only transition between IN_PROGRESS, FIXED, or REJECTED
+    // DEVELOPER can transition between all pipeline statuses
     if (!isAdmin && userRoleInProject === "DEVELOPER") {
-      const allowedDevStatuses = ["IN_PROGRESS", "FIXED", "REJECTED"];
+      const allowedDevStatuses: IssueStatus[] = [
+        "OPEN",
+        "READY_FOR_DEV",
+        "DEV_IN_PROGRESS",
+        "DEV_REVIEW",
+        "DEV_COMPLETED",
+        "DEV_DEPLOYED",
+        "QA_IN_PROGRESS",
+        "QA_DEPLOYED",
+        "READY_FOR_RELEASE",
+        "PROD_DEPLOYED",
+        "CLOSED",
+        "INVALID",
+        "IN_PROGRESS",
+        "FIXED",
+        "REJECTED",
+      ];
       if (!allowedDevStatuses.includes(newStatus)) {
         return {
           success: false,
-          error: "Developer permission: You can only transition issues to 'In Progress', 'Fixed', or 'Rejected as problem not found'.",
+          error: "Developer permission: Invalid status transition target.",
         };
       }
     }
@@ -247,6 +263,10 @@ export async function updateIssueDetailsAction(
   updates: {
     title?: string;
     description?: string;
+    stepsToReproduce?: string;
+    expected?: string | null;
+    actual?: string | null;
+    environment?: string | null;
     severity?: string;
     priority?: string;
     assigneeId?: string | null;
@@ -305,6 +325,22 @@ export async function updateIssueDetailsAction(
         });
       }
 
+      if (updates.expected !== undefined && updates.expected !== issue.expected) {
+        await writeIssueHistory(tx, issueId, session.user.id, {
+          fieldChanged: "expected",
+          oldValue: issue.expected,
+          newValue: updates.expected,
+        });
+      }
+
+      if (updates.actual !== undefined && updates.actual !== issue.actual) {
+        await writeIssueHistory(tx, issueId, session.user.id, {
+          fieldChanged: "actual",
+          oldValue: issue.actual,
+          newValue: updates.actual,
+        });
+      }
+
       if (updates.assigneeId !== undefined && updates.assigneeId !== issue.assigneeId) {
         let assigneeName = "Unassigned";
         if (updates.assigneeId) {
@@ -327,6 +363,10 @@ export async function updateIssueDetailsAction(
         data: {
           title: updates.title ?? undefined,
           description: updates.description ?? undefined,
+          stepsToReproduce: updates.stepsToReproduce ?? undefined,
+          expected: updates.expected === undefined ? undefined : updates.expected,
+          actual: updates.actual === undefined ? undefined : updates.actual,
+          environment: updates.environment === undefined ? undefined : updates.environment,
           severity: updates.severity ?? undefined,
           priority: updates.priority ?? undefined,
           assigneeId: updates.assigneeId === undefined ? undefined : updates.assigneeId,
