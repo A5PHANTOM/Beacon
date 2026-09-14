@@ -1,6 +1,7 @@
 "use client";
 
 import React, { FormEvent, useMemo, useState, useEffect } from "react";
+import { createPortal } from "react-dom";
 import type { IssueStatus } from "@/lib/workflow";
 import { allowedTransitions } from "@/lib/workflow";
 import {
@@ -157,6 +158,10 @@ export function IssueWorkspace({
   };
 }) {
   const router = useRouter();
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => {
+    setMounted(true);
+  }, []);
   const [issues, setIssues] = useState<WorkspaceIssue[]>(initialIssues);
   const [selected, setSelected] = useState<WorkspaceIssue | null>(null);
 
@@ -1915,17 +1920,17 @@ export function IssueWorkspace({
       </div>
 
       {/* CREATE NEW ISSUE MODAL */}
-      {isNewOpen && (
+      {mounted && isNewOpen && createPortal(
         <div
           style={{
             position: "fixed",
             inset: 0,
             background: "var(--overlay)",
-            zIndex: 60,
+            zIndex: 99999,
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
-            padding: "24px 16px",
+            padding: "40px 16px 24px",
             overflowY: "auto",
           }}
           onClick={(e) => {
@@ -1940,7 +1945,7 @@ export function IssueWorkspace({
               border: "1px solid var(--border)",
               borderRadius: 14,
               boxShadow: "var(--shadow-lg)",
-              maxHeight: "min(90vh, 780px)",
+              maxHeight: "min(86vh, 740px)",
               display: "flex",
               flexDirection: "column",
               margin: "auto",
@@ -2349,11 +2354,12 @@ export function IssueWorkspace({
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* DEVELOPER STATUS CHANGE MODAL WITH OPTIONAL NOTES */}
-      {statusNoteModal && (
+      {mounted && statusNoteModal && createPortal(
         <div
           style={{
             position: "fixed",
@@ -2362,8 +2368,8 @@ export function IssueWorkspace({
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
-            zIndex: 80,
-            padding: "24px 16px",
+            zIndex: 99999,
+            padding: "40px 16px 24px",
             overflowY: "auto",
           }}
           onClick={() => setStatusNoteModal(null)}
@@ -2524,16 +2530,17 @@ export function IssueWorkspace({
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* FULLSCREEN IMAGE LIGHTBOX MODAL */}
-      {previewImage && (
+      {mounted && previewImage && createPortal(
         <div
           style={{
             position: "fixed",
             inset: 0,
-            zIndex: 9999,
+            zIndex: 99999,
             backgroundColor: "rgba(0, 0, 0, 0.85)",
             backdropFilter: "blur(8px)",
             display: "flex",
@@ -2597,7 +2604,8 @@ export function IssueWorkspace({
               }}
             />
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* TOAST STACK */}
