@@ -163,6 +163,9 @@ export function IssueWorkspace({
     setMounted(true);
   }, []);
   const [issues, setIssues] = useState<WorkspaceIssue[]>(initialIssues);
+  useEffect(() => {
+    setIssues(initialIssues);
+  }, [initialIssues]);
   const [selected, setSelected] = useState<WorkspaceIssue | null>(null);
 
   // Filters & Sorting
@@ -626,6 +629,34 @@ export function IssueWorkspace({
       setCreateError(res.error || "Failed to create issue");
     } else {
       setIsNewOpen(false);
+      if (res.data) {
+        const created = res.data;
+        const assigned = members.find((m) => m.userId === created.assigneeId);
+        const newItem: WorkspaceIssue = {
+          id: created.id,
+          projectId: created.projectId,
+          number: created.number,
+          key: `${project.key}-${created.number}`,
+          title: created.title,
+          description: created.description,
+          stepsToReproduce: created.stepsToReproduce,
+          expected: created.expected,
+          actual: created.actual,
+          environment: created.environment,
+          status: created.status as IssueStatus,
+          severity: created.severity as WorkspaceIssue["severity"],
+          priority: created.priority as WorkspaceIssue["priority"],
+          assigneeId: created.assigneeId,
+          assigneeName: assigned?.name || "Unassigned",
+          reporterName: currentUser.name,
+          updatedAt: "Just now",
+          createdAt: new Date().toISOString(),
+          commentsCount: 0,
+          attachmentsCount: newImage ? 1 : 0,
+        };
+        setIssues((prev) => [newItem, ...prev]);
+        setSelected(newItem);
+      }
       setNewTitle("");
       setNewDesc("");
       setNewSteps("");
@@ -634,7 +665,7 @@ export function IssueWorkspace({
       setNewEnv("");
       setNewImage(null);
       setNewAssigneeId(developers[0]?.userId || "");
-      showToast("Draft issue created");
+      showToast("Issue created successfully");
       router.refresh();
     }
   }
@@ -1710,34 +1741,33 @@ export function IssueWorkspace({
               )}
 
               {/* Expected & Actual */}
-              {(selected.expected || selected.actual) && (
-                <div style={{ display: "grid", gridTemplateColumns: selected.expected && selected.actual ? "1fr 1fr" : "1fr", gap: 10, marginTop: 14 }}>
-                  {selected.expected && (
-                    <div style={{ background: "var(--ok-soft)", border: "1px solid var(--ok-bd, rgba(52, 211, 153, 0.2))", padding: 12, borderRadius: 8 }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 10.5, fontWeight: 700, color: "var(--ok)", textTransform: "uppercase" }}>
-                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                          <polyline points="20 6 9 17 4 12" />
-                        </svg>
-                        Expected Result
-                      </div>
-                      <div style={{ fontSize: 12.5, marginTop: 4, lineHeight: 1.5, whiteSpace: "pre-wrap" }}>{selected.expected}</div>
-                    </div>
-                  )}
-                  {selected.actual && (
-                    <div style={{ background: "var(--crit-soft)", border: "1px solid var(--crit-bd, rgba(239, 68, 68, 0.2))", padding: 12, borderRadius: 8 }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 10.5, fontWeight: 700, color: "var(--crit)", textTransform: "uppercase" }}>
-                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                          <circle cx="12" cy="12" r="10" />
-                          <line x1="15" y1="9" x2="9" y2="15" />
-                          <line x1="9" y1="9" x2="15" y2="15" />
-                        </svg>
-                        Actual Result
-                      </div>
-                      <div style={{ fontSize: 12.5, marginTop: 4, lineHeight: 1.5, whiteSpace: "pre-wrap" }}>{selected.actual}</div>
-                    </div>
-                  )}
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginTop: 14 }}>
+                <div style={{ background: "var(--ok-soft)", border: "1px solid var(--ok-bd, rgba(52, 211, 153, 0.2))", padding: 12, borderRadius: 8 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 10.5, fontWeight: 700, color: "var(--ok)", textTransform: "uppercase" }}>
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                      <polyline points="20 6 9 17 4 12" />
+                    </svg>
+                    Expected Result
+                  </div>
+                  <div style={{ fontSize: 12.5, marginTop: 4, lineHeight: 1.5, whiteSpace: "pre-wrap", color: selected.expected ? "var(--text)" : "var(--text-faint)", fontStyle: selected.expected ? "normal" : "italic" }}>
+                    {selected.expected || "Not specified"}
+                  </div>
                 </div>
-              )}
+
+                <div style={{ background: "var(--crit-soft)", border: "1px solid var(--crit-bd, rgba(239, 68, 68, 0.2))", padding: 12, borderRadius: 8 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 10.5, fontWeight: 700, color: "var(--crit)", textTransform: "uppercase" }}>
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                      <circle cx="12" cy="12" r="10" />
+                      <line x1="15" y1="9" x2="9" y2="15" />
+                      <line x1="9" y1="9" x2="15" y2="15" />
+                    </svg>
+                    Actual Result
+                  </div>
+                  <div style={{ fontSize: 12.5, marginTop: 4, lineHeight: 1.5, whiteSpace: "pre-wrap", color: selected.actual ? "var(--text)" : "var(--text-faint)", fontStyle: selected.actual ? "normal" : "italic" }}>
+                    {selected.actual || "Not specified"}
+                  </div>
+                </div>
+              </div>
 
               {/* Attachments & Screenshots */}
               {attachments.length > 0 && (
