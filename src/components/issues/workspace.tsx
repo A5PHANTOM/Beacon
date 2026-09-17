@@ -179,6 +179,7 @@ export function IssueWorkspace({
 
   // Row dropdown & animation state
   const [openRowStatusId, setOpenRowStatusId] = useState<string | null>(null);
+  const [openRowAssigneeId, setOpenRowAssigneeId] = useState<string | null>(null);
   const [landedId, setLandedId] = useState<string | null>(null);
 
   // Drawer custom dropdowns
@@ -254,6 +255,7 @@ export function IssueWorkspace({
   useEffect(() => {
     function handleClickOutside() {
       setOpenRowStatusId(null);
+      setOpenRowAssigneeId(null);
       setDrawerStatusOpen(false);
       setDrawerPriOpen(false);
       setDrawerAssigneeOpen(false);
@@ -290,9 +292,12 @@ export function IssueWorkspace({
   const isDev = currentUser.roleInProject === "DEVELOPER" && currentUser.role !== "ADMIN";
   const isLeadOrAdmin = currentUser.role === "ADMIN" || currentUser.roleInProject === "LEAD";
 
-  // Developers strictly filtered (roleInProject === 'DEVELOPER')
+  // Assignable engineering members (DEVELOPER and LEAD)
   const developers = useMemo(
-    () => members.filter((m) => m.roleInProject === "DEVELOPER"),
+    () =>
+      members.filter(
+        (m) => m.roleInProject === "DEVELOPER" || m.roleInProject === "LEAD"
+      ),
     [members]
   );
 
@@ -726,9 +731,8 @@ export function IssueWorkspace({
     }
   }
 
-  async function handleReassign(newAssigneeId: string) {
-    if (!selected) return;
-    const res = await updateIssueDetailsAction(selected.id, {
+  async function handleReassign(issueId: string, newAssigneeId: string) {
+    const res = await updateIssueDetailsAction(issueId, {
       assigneeId: newAssigneeId || null,
     });
 
@@ -738,18 +742,22 @@ export function IssueWorkspace({
       const assigned = members.find((m) => m.userId === newAssigneeId);
       const newName = assigned?.name || "Unassigned";
       setSelected((prev) =>
-        prev ? { ...prev, assigneeId: newAssigneeId || null, assigneeName: newName } : null
+        prev && prev.id === issueId
+          ? { ...prev, assigneeId: newAssigneeId || null, assigneeName: newName }
+          : prev
       );
       setIssues((prev) =>
         prev.map((i) =>
-          i.id === selected.id
+          i.id === issueId
             ? { ...i, assigneeId: newAssigneeId || null, assigneeName: newName }
             : i
         )
       );
-      getIssueAuditHistoryAction(selected.id).then((r) => {
-        if (r.success && r.data) setAuditHistory(r.data.history);
-      });
+      if (selected?.id === issueId) {
+        getIssueAuditHistoryAction(issueId).then((r) => {
+          if (r.success && r.data) setAuditHistory(r.data.history);
+        });
+      }
       showToast(`Assigned to ${newName}`);
       router.refresh();
     }
@@ -1377,10 +1385,16 @@ export function IssueWorkspace({
                   {issue.environment || project.key.toLowerCase()}
                 </span>
 
-                {/* Assignee (Avatar + Name) */}
+                {/* Assignee (Avatar + Name) with interactive dropdown */}
                 <div
-                  className={`row-assignee ${issue.assigneeName === "Unassigned" ? "unassigned" : ""}`}
-                  title={`Assignee: ${issue.assigneeName}`}
+                  className={`row-assignee ${issue.assigneeName === "Unassigned" ? "unassigned" : ""} ${openRowAssigneeId === issue.id ? "open" : ""}`}
+                  title={`Assignee: ${issue.assigneeName} (Click to reassign)`}
+                  data-dd="row"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setOpenRowAssigneeId(openRowAssigneeId === issue.id ? null : issue.id);
+                    setOpenRowStatusId(null);
+                  }}
                 >
                   <div
                     className="mini-avatar"
@@ -1396,6 +1410,70 @@ export function IssueWorkspace({
                   <span className="row-assignee-name">
                     {issue.assigneeName}
                   </span>
+                  <svg
+                    width="7"
+                    height="7"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2.5"
+                    style={{ opacity: 0.5, marginLeft: 2 }}
+                  >
+                    <path d="M6 9l6 6 6-6" />
+                  </svg>
+
+                  {openRowAssigneeId === issue.id && (
+                    <div
+                      className="dd-menu"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <div
+                        className="dd-item"
+                        onClick={() => {
+                          setOpenRowAssigneeId(null);
+                          handleReassign(issue.id, "");
+                        }}
+                      >
+                        <div
+                          className="mini-avatar"
+                          style={{
+                            background: "var(--text-faint)",
+                            width: 16,
+                            height: 16,
+                            fontSize: 7,
+                          }}
+                        >
+                          –
+                        </div>
+                        Unassigned
+                      </div>
+                      {developers.map((d) => (
+                        <div
+                          key={d.userId}
+                          className="dd-item"
+                          onClick={() => {
+                            setOpenRowAssigneeId(null);
+                            handleReassign(issue.id, d.userId);
+                          }}
+                        >
+                          <div
+                            className="mini-avatar"
+                            style={{
+                              background: "#0F7A73",
+                              width: 16,
+                              height: 16,
+                              fontSize: 7,
+                            }}
+                          >
+                            {d.name.charAt(0)}
+                          </div>
+                          <span>
+                            {d.name} {d.roleInProject === "LEAD" ? "(Lead)" : ""}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
 
                 {/* Updated Relative Time */}
@@ -1476,19 +1554,17 @@ export function IssueWorkspace({
 
                 {/* Actions */}
                 <div className="row-actions" onClick={(e) => e.stopPropagation()}>
-                  {!isTester && (
-                    <button
-                      type="button"
-                      title="Assign Developer"
-                      className="row-assign-btn"
-                      onClick={() => {
-                        setSelected(issue);
-                        setDrawerAssigneeOpen(true);
-                      }}
-                    >
-                      👤
-                    </button>
-                  )}
+                  <button
+                    type="button"
+                    title="Assign Developer"
+                    className="row-assign-btn"
+                    onClick={() => {
+                      setOpenRowAssigneeId(openRowAssigneeId === issue.id ? null : issue.id);
+                      setOpenRowStatusId(null);
+                    }}
+                  >
+                    👤
+                  </button>
                   <button
                     type="button"
                     title="View details"
@@ -1666,7 +1742,7 @@ export function IssueWorkspace({
                         className="dd-item"
                         onClick={() => {
                           setDrawerAssigneeOpen(false);
-                          handleReassign("");
+                          handleReassign(selected.id, "");
                         }}
                       >
                         <div className="mini-avatar" style={{ background: "var(--text-faint)", width: 16, height: 16, fontSize: 7 }}>
@@ -1680,13 +1756,15 @@ export function IssueWorkspace({
                           className="dd-item"
                           onClick={() => {
                             setDrawerAssigneeOpen(false);
-                            handleReassign(d.userId);
+                            handleReassign(selected.id, d.userId);
                           }}
                         >
                           <div className="mini-avatar" style={{ background: "#0F7A73", width: 16, height: 16, fontSize: 7 }}>
                             {d.name.charAt(0)}
                           </div>
-                          {d.name}
+                          <span>
+                            {d.name} {d.roleInProject === "LEAD" ? "(Lead)" : ""}
+                          </span>
                         </div>
                       ))}
                     </div>
@@ -1945,20 +2023,21 @@ export function IssueWorkspace({
 
             {/* DRAWER FOOTER */}
             <div className="drawer-footer">
-              {!isTester && (
-                <button
-                  type="button"
-                  className="btn-ghost"
-                  id="footerAssign"
-                  onClick={() => setDrawerAssigneeOpen(!drawerAssigneeOpen)}
-                >
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <circle cx="12" cy="8" r="4" />
-                    <path d="M4 21v-1a7 7 0 0 1 14 0v1" />
-                  </svg>
-                  Assign
-                </button>
-              )}
+              <button
+                type="button"
+                className="btn-ghost"
+                id="footerAssign"
+                onClick={() => {
+                  setDrawerAssigneeOpen(!drawerAssigneeOpen);
+                  document.getElementById("assigneeDD")?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+                }}
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <circle cx="12" cy="8" r="4" />
+                  <path d="M4 21v-1a7 7 0 0 1 14 0v1" />
+                </svg>
+                Assign
+              </button>
 
               <button
                 type="button"
