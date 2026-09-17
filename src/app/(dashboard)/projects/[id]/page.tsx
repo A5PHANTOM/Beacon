@@ -84,6 +84,7 @@ export default async function ProjectIssuesPage({ params }: Props) {
     priority: i.priority as WorkspaceIssue["priority"],
     assigneeId: i.assigneeId,
     assigneeName: i.assignee?.name || "Unassigned",
+    reporterId: i.reporterId,
     reporterName: i.reporter.name,
     updatedAt: i.updatedAt.toISOString(),
     createdAt: i.createdAt.toISOString(),

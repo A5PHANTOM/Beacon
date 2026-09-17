@@ -29,6 +29,7 @@ export type WorkspaceIssue = {
   priority: "LOW" | "MEDIUM" | "HIGH" | "URGENT";
   assigneeId: string | null;
   assigneeName: string;
+  reporterId?: string | null;
   reporterName: string;
   updatedAt: string;
   createdAt?: string;
@@ -174,6 +175,7 @@ export function IssueWorkspace({
   const [filterStatus, setFilterStatus] = useState<string>("ALL");
   const [sortBy, setSortBy] = useState<string>("RATING_DESC");
   const [myTasksOnly, setMyTasksOnly] = useState(false);
+  const [raisedByMeOnly, setRaisedByMeOnly] = useState(false);
 
   // Row dropdown & animation state
   const [openRowStatusId, setOpenRowStatusId] = useState<string | null>(null);
@@ -466,10 +468,15 @@ export function IssueWorkspace({
           ? ["FIXED", "DEV_COMPLETED", "DEV_DEPLOYED", "QA_DEPLOYED", "READY_FOR_RELEASE", "PROD_DEPLOYED", "VERIFIED", "CLOSED"].includes(issue.status)
           : issue.status === filterStatus);
       const matchesMyTasks = !myTasksOnly || issue.assigneeId === currentUser.id;
+      const matchesRaisedByMe =
+        !raisedByMeOnly ||
+        issue.reporterId === currentUser.id ||
+        (Boolean(issue.reporterName && currentUser.name) &&
+          issue.reporterName.toLowerCase() === currentUser.name.toLowerCase());
 
-      return matchesSeverity && matchesAssignee && matchesStatus && matchesMyTasks;
+      return matchesSeverity && matchesAssignee && matchesStatus && matchesMyTasks && matchesRaisedByMe;
     });
-  }, [issues, filterSeverity, filterAssignee, filterStatus, myTasksOnly, currentUser.id]);
+  }, [issues, filterSeverity, filterAssignee, filterStatus, myTasksOnly, raisedByMeOnly, currentUser.id, currentUser.name]);
 
   // Sort issues
   const sortedIssues = useMemo(() => {
@@ -503,6 +510,14 @@ export function IssueWorkspace({
   const resolvedCount = issues.filter((i) =>
     ["FIXED", "VERIFIED", "DEV_COMPLETED", "DEV_DEPLOYED", "QA_DEPLOYED", "READY_FOR_RELEASE", "PROD_DEPLOYED", "CLOSED"].includes(i.status)
   ).length;
+  const myRaisedCount = useMemo(() => {
+    return issues.filter(
+      (i) =>
+        i.reporterId === currentUser.id ||
+        (Boolean(i.reporterName && currentUser.name) &&
+          i.reporterName.toLowerCase() === currentUser.name.toLowerCase())
+    ).length;
+  }, [issues, currentUser.id, currentUser.name]);
   const solveRate =
     totalIssuesCount > 0 ? Math.round((resolvedCount / totalIssuesCount) * 100) : 0;
 
@@ -644,6 +659,7 @@ export function IssueWorkspace({
           priority: created.priority as WorkspaceIssue["priority"],
           assigneeId: created.assigneeId,
           assigneeName: assigned?.name || "Unassigned",
+          reporterId: currentUser.id,
           reporterName: currentUser.name,
           updatedAt: "Just now",
           createdAt: new Date().toISOString(),
@@ -1006,7 +1022,7 @@ export function IssueWorkspace({
           </span>
         </div>
 
-        {/* Quick View Segmented Tabs: All Raised vs Open vs Covered/Solved */}
+        {/* Quick View Segmented Tabs: All Raised vs Already Raised by Me vs Open vs Covered/Solved */}
         <div
           style={{
             display: "inline-flex",
@@ -1021,6 +1037,7 @@ export function IssueWorkspace({
           <button
             type="button"
             onClick={() => {
+              setRaisedByMeOnly(false);
               setFilterStatus("ALL");
               setFilterSeverity("ALL");
               showToast(`Showing all ${totalIssuesCount} issues raised till now`);
@@ -1033,15 +1050,15 @@ export function IssueWorkspace({
               border: "none",
               cursor: "pointer",
               background:
-                filterStatus === "ALL" && filterSeverity === "ALL"
+                !raisedByMeOnly && filterStatus === "ALL" && filterSeverity === "ALL"
                   ? "var(--surface)"
                   : "transparent",
               color:
-                filterStatus === "ALL" && filterSeverity === "ALL"
+                !raisedByMeOnly && filterStatus === "ALL" && filterSeverity === "ALL"
                   ? "var(--text)"
                   : "var(--text-dim)",
               boxShadow:
-                filterStatus === "ALL" && filterSeverity === "ALL"
+                !raisedByMeOnly && filterStatus === "ALL" && filterSeverity === "ALL"
                   ? "var(--shadow-xs)"
                   : "none",
               transition: "all 0.15s ease",
@@ -1051,7 +1068,33 @@ export function IssueWorkspace({
           </button>
           <button
             type="button"
+            id="tabAlreadyRaised"
             onClick={() => {
+              setRaisedByMeOnly(true);
+              setFilterStatus("ALL");
+              setFilterSeverity("ALL");
+              setMyTasksOnly(false);
+              showToast(`Showing ${myRaisedCount} issues already raised by you`);
+            }}
+            style={{
+              padding: "5px 11px",
+              borderRadius: 7,
+              fontSize: 12,
+              fontWeight: 600,
+              border: "none",
+              cursor: "pointer",
+              background: raisedByMeOnly ? "var(--surface)" : "transparent",
+              color: raisedByMeOnly ? "var(--warn)" : "var(--text-dim)",
+              boxShadow: raisedByMeOnly ? "var(--shadow-xs)" : "none",
+              transition: "all 0.15s ease",
+            }}
+          >
+            Already Raised by Me ({myRaisedCount})
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setRaisedByMeOnly(false);
               setFilterStatus("OPEN");
               setFilterSeverity("ALL");
               showToast(`Showing ${openIssuesCount} open issues`);
@@ -1063,9 +1106,9 @@ export function IssueWorkspace({
               fontWeight: 600,
               border: "none",
               cursor: "pointer",
-              background: filterStatus === "OPEN" ? "var(--surface)" : "transparent",
-              color: filterStatus === "OPEN" ? "var(--text)" : "var(--text-dim)",
-              boxShadow: filterStatus === "OPEN" ? "var(--shadow-xs)" : "none",
+              background: !raisedByMeOnly && filterStatus === "OPEN" ? "var(--surface)" : "transparent",
+              color: !raisedByMeOnly && filterStatus === "OPEN" ? "var(--text)" : "var(--text-dim)",
+              boxShadow: !raisedByMeOnly && filterStatus === "OPEN" ? "var(--shadow-xs)" : "none",
               transition: "all 0.15s ease",
             }}
           >
@@ -1074,6 +1117,7 @@ export function IssueWorkspace({
           <button
             type="button"
             onClick={() => {
+              setRaisedByMeOnly(false);
               setFilterStatus("RESOLVED");
               setFilterSeverity("ALL");
               showToast(`Showing all ${resolvedCount} issues covered & resolved`);
@@ -1085,9 +1129,9 @@ export function IssueWorkspace({
               fontWeight: 600,
               border: "none",
               cursor: "pointer",
-              background: filterStatus === "RESOLVED" ? "var(--surface)" : "transparent",
-              color: filterStatus === "RESOLVED" ? "var(--ok)" : "var(--text-dim)",
-              boxShadow: filterStatus === "RESOLVED" ? "var(--shadow-xs)" : "none",
+              background: !raisedByMeOnly && filterStatus === "RESOLVED" ? "var(--surface)" : "transparent",
+              color: !raisedByMeOnly && filterStatus === "RESOLVED" ? "var(--ok)" : "var(--text-dim)",
+              boxShadow: !raisedByMeOnly && filterStatus === "RESOLVED" ? "var(--shadow-xs)" : "none",
               transition: "all 0.15s ease",
             }}
           >
@@ -1186,9 +1230,40 @@ export function IssueWorkspace({
               borderColor: myTasksOnly ? "var(--accent)" : "var(--border)",
               fontWeight: myTasksOnly ? 700 : 500,
             }}
-            onClick={() => setMyTasksOnly(!myTasksOnly)}
+            onClick={() => {
+              const nextVal = !myTasksOnly;
+              setMyTasksOnly(nextVal);
+              if (nextVal) setRaisedByMeOnly(false);
+            }}
           >
             {myTasksOnly ? "✓ My Work Only" : "My Work"}
+          </button>
+        )}
+
+        {/* Tester / QA Quick Toggle: Already Raised by Me */}
+        {isTester && (
+          <button
+            type="button"
+            className="filter-chip"
+            id="testerRaisedFilterBtn"
+            style={{
+              background: raisedByMeOnly ? "var(--warn-soft)" : "var(--surface)",
+              color: raisedByMeOnly ? "var(--warn)" : "var(--text-dim)",
+              borderColor: raisedByMeOnly ? "var(--warn)" : "var(--border)",
+              fontWeight: raisedByMeOnly ? 700 : 500,
+            }}
+            onClick={() => {
+              const nextVal = !raisedByMeOnly;
+              setRaisedByMeOnly(nextVal);
+              if (nextVal) setMyTasksOnly(false);
+              showToast(
+                nextVal
+                  ? `Filtering ${myRaisedCount} issues already raised by you`
+                  : "Showing all project issues"
+              );
+            }}
+          >
+            {raisedByMeOnly ? "✓ Already Raised by Me" : "Already Raised by Me"}
           </button>
         )}
 
@@ -1235,6 +1310,7 @@ export function IssueWorkspace({
                 setFilterAssignee("ALL");
                 setFilterStatus("ALL");
                 setMyTasksOnly(false);
+                setRaisedByMeOnly(false);
               }}
             >
               Reset filters
