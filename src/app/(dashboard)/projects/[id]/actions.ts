@@ -174,17 +174,9 @@ export async function updateIssueStatusAction(
     }
 
     // Role-specific workflow guards:
-    // Tester (QA) can only raise issues and inspect status — CANNOT update status
-    if (!isAdmin && userRoleInProject === "QA") {
-      return {
-        success: false,
-        error: "Testers can only raise issues and check their status. Only developers can update the status.",
-      };
-    }
-
-    // DEVELOPER can transition between all pipeline statuses
-    if (!isAdmin && userRoleInProject === "DEVELOPER") {
-      const allowedDevStatuses: IssueStatus[] = [
+    // DEVELOPER and QA (Tester) can transition between pipeline statuses
+    if (!isAdmin && (userRoleInProject === "DEVELOPER" || userRoleInProject === "QA")) {
+      const allowedPipelineStatuses: IssueStatus[] = [
         "OPEN",
         "READY_FOR_DEV",
         "DEV_IN_PROGRESS",
@@ -201,10 +193,10 @@ export async function updateIssueStatusAction(
         "FIXED",
         "REJECTED",
       ];
-      if (!allowedDevStatuses.includes(newStatus)) {
+      if (!allowedPipelineStatuses.includes(newStatus)) {
         return {
           success: false,
-          error: "Developer permission: Invalid status transition target.",
+          error: "Permission denied: Invalid status transition target.",
         };
       }
     }

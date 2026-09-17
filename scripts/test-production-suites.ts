@@ -239,14 +239,21 @@ async function main() {
   // -------------------------------------------------------------
   console.log("\nGROUP 4: ROLE WORKFLOWS & PERMISSION BOUNDARIES");
 
-  await runTest(15, "Permissions", "Tester/QA Status Modification Forbidden by Server Guard", async () => {
-    const userRoleInProject = "QA";
+  await runTest(15, "Permissions", "Tester/QA Status Modification Permitted & Viewer Blocked by Server Guard", async () => {
     const isAdmin = false;
     
-    // Simulate server action check from actions.ts
-    const canTesterUpdate = !(!isAdmin && userRoleInProject === "QA");
-    if (canTesterUpdate) {
-      throw new Error("Server guard failed to block status update for QA user");
+    // Simulate server action check from actions.ts for QA role:
+    const qaRoleInProject: string = "QA";
+    const canTesterUpdate = isAdmin || qaRoleInProject === "DEVELOPER" || qaRoleInProject === "QA";
+    if (!canTesterUpdate) {
+      throw new Error("Server guard failed to permit status update for QA user");
+    }
+
+    // Simulate server action check from actions.ts for VIEWER role:
+    const viewerRoleInProject = "VIEWER";
+    const canViewerUpdate = !(!isAdmin && viewerRoleInProject === "VIEWER");
+    if (canViewerUpdate) {
+      throw new Error("Server guard failed to block status update for VIEWER user");
     }
   });
 

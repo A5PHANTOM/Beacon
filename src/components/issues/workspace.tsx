@@ -282,7 +282,7 @@ export function IssueWorkspace({
     }
   }, [selected?.id]);
 
-  // Roles: Tester can only raise issues & check status; Developer manages In Progress, Fixed, Rejected
+  // Roles: Tester can raise issues & update status; Developer manages In Progress, Fixed, Rejected
   const isTester = currentUser.roleInProject === "QA" && currentUser.role !== "ADMIN";
   const isQA = isTester;
   const isDev = currentUser.roleInProject === "DEVELOPER" && currentUser.role !== "ADMIN";
@@ -296,10 +296,6 @@ export function IssueWorkspace({
 
   // Helper to compute allowed transitions for any issue based on user role
   function getTransitionsForIssue(issue: WorkspaceIssue) {
-    // Tester login can only raise issues and check status of raised issues — CANNOT update status
-    if (isTester) {
-      return [];
-    }
     // Pipeline statuses from workflow
     const allPipelineStatuses: IssueStatus[] = [
       "OPEN",
@@ -830,7 +826,7 @@ export function IssueWorkspace({
           {isDev
             ? "Here are the engineering issues assigned to you for code implementation and fixing."
             : isQA
-            ? "Raise new issues, log bug reports, and check the status of reported defects."
+            ? "Raise new issues, log bug reports, update statuses, and verify defect fixes."
             : `Here's what's happening across ${project.name} (${project.key}).`}
         </p>
       </div>
@@ -1329,97 +1325,78 @@ export function IssueWorkspace({
                 {/* Updated Relative Time */}
                 <span className="row-time">{formatTimeAgo(issue.updatedAt)}</span>
 
-                {/* Status: Read-only for QA / Tester, dropdown for Developer */}
-                {isTester ? (
-                  <div className="row-status">
-                    <div
-                      className="row-status-btn"
-                      style={{ cursor: "default", opacity: 0.95 }}
-                      title="Status (Read-only for QA/Testers)"
-                    >
-                      <span
-                        className="dd-dot"
-                        style={{ background: getStatusDotColor(issue.status) }}
-                      />
-                      <span className="status-text">
-                        {getStatusLabel(issue.status)}
-                      </span>
-                    </div>
-                  </div>
-                ) : (
+                {/* Status Dropdown */}
+                <div
+                  className={`row-status ${isMenuOpen ? "open" : ""}`}
+                  data-dd="row"
+                  onClick={(e) => e.stopPropagation()}
+                >
                   <div
-                    className={`row-status ${isMenuOpen ? "open" : ""}`}
-                    data-dd="row"
-                    onClick={(e) => e.stopPropagation()}
+                    className="row-status-btn"
+                    data-status-trigger
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setOpenRowStatusId(isMenuOpen ? null : issue.id);
+                    }}
                   >
-                    <div
-                      className="row-status-btn"
-                      data-status-trigger
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setOpenRowStatusId(isMenuOpen ? null : issue.id);
-                      }}
+                    <span
+                      className="dd-dot"
+                      style={{ background: getStatusDotColor(issue.status) }}
+                    />
+                    <span className="status-text">
+                      {getStatusLabel(issue.status)}
+                    </span>
+                    <svg
+                      width="10"
+                      height="10"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2.5"
                     >
-                      <span
-                        className="dd-dot"
-                        style={{ background: getStatusDotColor(issue.status) }}
-                      />
-                      <span className="status-text">
-                        {getStatusLabel(issue.status)}
-                      </span>
-                      <svg
-                        width="8"
-                        height="8"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="2.5"
-                        style={{ opacity: 0.6 }}
-                      >
-                        <path d="M6 9l6 6 6-6" />
-                      </svg>
-                    </div>
+                      <path d="M6 9l6 6 6-6" />
+                    </svg>
+                  </div>
 
-                    {/* Developer Status Options: In Progress, Fixed, Rejected */}
-                    {isMenuOpen && (
-                      <div className="dd-menu">
-                        {allowedTransitionsForThis.length === 0 ? (
+                  {/* Developer Status Options: In Progress, Fixed, Rejected */}
+                  {isMenuOpen && (
+                    <div className="dd-menu">
+                      {allowedTransitionsForThis.length === 0 ? (
+                        <div
+                          style={{
+                            padding: "6px 8px",
+                            fontSize: 11,
+                            color: "var(--text-faint)",
+                          }}
+                        >
+                          No actions available
+                        </div>
+                      ) : (
+                        allowedTransitionsForThis.map((target) => (
                           <div
-                            style={{
-                              padding: "6px 8px",
-                              fontSize: 11,
-                              color: "var(--text-faint)",
+                            key={target}
+                            className="dd-item"
+                            onClick={() => {
+                              setOpenRowStatusId(null);
+                              requestStatusChange(
+                                issue.id,
+                                issue.key,
+                                issue.title,
+                                target
+                              );
                             }}
                           >
-                            No actions available
+                            <span
+                              className="dd-dot"
+                              style={{ background: getStatusDotColor(target) }}
+                            />
+                            <span>{getStatusLabel(target)}</span>
                           </div>
-                        ) : (
-                          allowedTransitionsForThis.map((target) => (
-                            <div
-                              key={target}
-                              className="dd-item"
-                              onClick={() => {
-                                setOpenRowStatusId(null);
-                                requestStatusChange(
-                                  issue.id,
-                                  issue.key,
-                                  issue.title,
-                                  target
-                                );
-                              }}
-                            >
-                              <span
-                                className="dd-dot"
-                                style={{ background: getStatusDotColor(target) }}
-                              />
-                              <span>{getStatusLabel(target)}</span>
-                            </div>
-                          ))
-                        )}
-                      </div>
-                    )}
-                  </div>
-                )}
+                        ))
+                      )}
+                    </div>
+                  )}
+                </div>
 
                 {/* Actions */}
                 <div className="row-actions" onClick={(e) => e.stopPropagation()}>
@@ -1482,37 +1459,27 @@ export function IssueWorkspace({
             <div className="drawer-body">
               {/* Meta Grid with Dropdowns */}
               <div className="meta-grid">
-                {/* Status: Read-only for QA / Tester, dropdown for Developer */}
+                {/* Status Dropdown */}
                 <div className={`meta-item ${drawerStatusOpen ? "open" : ""}`} id="statusDD" onClick={(e) => e.stopPropagation()}>
                   <div className="ml">Status</div>
-                  {isTester ? (
-                    <div className="meta-select" style={{ cursor: "default" }}>
-                      <span
-                        className="dd-dot"
-                        style={{ background: getStatusDotColor(selected.status) }}
-                      />
-                      <span id="statusLabel">{getStatusLabel(selected.status)}</span>
-                    </div>
-                  ) : (
-                    <>
-                      <div
-                        className="meta-select"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setDrawerStatusOpen(!drawerStatusOpen);
-                          setDrawerPriOpen(false);
-                          setDrawerAssigneeOpen(false);
-                        }}
-                      >
-                        <span
-                          className="dd-dot"
-                          style={{ background: getStatusDotColor(selected.status) }}
-                        />
-                        <span id="statusLabel">{getStatusLabel(selected.status)}</span>
-                        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                          <path d="M6 9l6 6 6-6" />
-                        </svg>
-                      </div>
+                  <div
+                    className="meta-select"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setDrawerStatusOpen(!drawerStatusOpen);
+                      setDrawerPriOpen(false);
+                      setDrawerAssigneeOpen(false);
+                    }}
+                  >
+                    <span
+                      className="dd-dot"
+                      style={{ background: getStatusDotColor(selected.status) }}
+                    />
+                    <span id="statusLabel">{getStatusLabel(selected.status)}</span>
+                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                      <path d="M6 9l6 6 6-6" />
+                    </svg>
+                  </div>
 
                       {drawerStatusOpen && (
                         <div className="dd-menu">
@@ -1542,8 +1509,6 @@ export function IssueWorkspace({
                           )}
                         </div>
                       )}
-                    </>
-                  )}
                 </div>
 
                 {/* Priority Dropdown */}
@@ -1904,46 +1869,32 @@ export function IssueWorkspace({
 
             {/* DRAWER FOOTER */}
             <div className="drawer-footer">
-              {isTester ? (
-                <div
-                  style={{
-                    flex: 1,
-                    textAlign: "center",
-                    fontSize: 12,
-                    color: "var(--text-faint)",
-                    padding: "6px 0",
-                  }}
+              {!isTester && (
+                <button
+                  type="button"
+                  className="btn-ghost"
+                  id="footerAssign"
+                  onClick={() => setDrawerAssigneeOpen(!drawerAssigneeOpen)}
                 >
-                  Status is managed by developers. Testers can check status or post comments above.
-                </div>
-              ) : (
-                <>
-                  <button
-                    type="button"
-                    className="btn-ghost"
-                    id="footerAssign"
-                    onClick={() => setDrawerAssigneeOpen(!drawerAssigneeOpen)}
-                  >
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                      <circle cx="12" cy="8" r="4" />
-                      <path d="M4 21v-1a7 7 0 0 1 14 0v1" />
-                    </svg>
-                    Assign
-                  </button>
-
-                  <button
-                    type="button"
-                    className="btn-primary"
-                    id="footerStatus"
-                    onClick={() => setDrawerStatusOpen(true)}
-                  >
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                      <path d="M20 6L9 17l-5-5" />
-                    </svg>
-                    Change status
-                  </button>
-                </>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <circle cx="12" cy="8" r="4" />
+                    <path d="M4 21v-1a7 7 0 0 1 14 0v1" />
+                  </svg>
+                  Assign
+                </button>
               )}
+
+              <button
+                type="button"
+                className="btn-primary"
+                id="footerStatus"
+                onClick={() => setDrawerStatusOpen(true)}
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                  <path d="M20 6L9 17l-5-5" />
+                </svg>
+                Change status
+              </button>
             </div>
           </>
         )}
