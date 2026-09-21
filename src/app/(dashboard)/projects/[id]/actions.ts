@@ -7,6 +7,12 @@ import { writeIssueHistory } from "@/lib/history";
 import { canTransition, type IssueStatus } from "@/lib/workflow";
 import { revalidatePath } from "next/cache";
 
+const imageItemSchema = z.object({
+  filename: z.string(),
+  fileUrl: z.string(),
+  size: z.number().default(0),
+});
+
 const createIssueSchema = z.object({
   projectId: z.string(),
   title: z.string().trim().min(3, "Title must be at least 3 characters"),
@@ -18,13 +24,8 @@ const createIssueSchema = z.object({
   severity: z.enum(["LOW", "MEDIUM", "HIGH", "CRITICAL"]).default("MEDIUM"),
   priority: z.enum(["LOW", "MEDIUM", "HIGH", "URGENT"]).default("MEDIUM"),
   assigneeId: z.string().min(1, "Assigning a developer is mandatory"),
-  image: z
-    .object({
-      filename: z.string(),
-      fileUrl: z.string(),
-      size: z.number().default(0),
-    })
-    .optional(),
+  image: imageItemSchema.optional(),
+  images: z.array(imageItemSchema).optional(),
 });
 
 export async function createIssueAction(data: z.infer<typeof createIssueSchema>) {
@@ -50,7 +51,17 @@ export async function createIssueAction(data: z.infer<typeof createIssueSchema>)
       priority,
       assigneeId,
       image,
+      images,
     } = parsed.data;
+
+    // Consolidate images (support both single image and multiple images array)
+    const allImages: Array<{ filename: string; fileUrl: string; size: number }> = [];
+    if (images && images.length > 0) {
+      allImages.push(...images);
+    }
+    if (image && image.fileUrl && !allImages.some((i) => i.fileUrl === image.fileUrl)) {
+      allImages.push(image);
+    }
 
     // Verify project access
     const isAdmin = session.user.role === "ADMIN";
@@ -92,7 +103,7 @@ export async function createIssueAction(data: z.infer<typeof createIssueSchema>)
     });
     const nextNumber = (latestIssue?.number || 0) + 1;
 
-    // Create issue, attachment (if provided), and history in transaction
+    // Create issue, attachments (if provided), and history in transaction
     const newIssue = await prisma.$transaction(async (tx) => {
       const issue = await tx.issue.create({
         data: {
@@ -112,22 +123,33 @@ export async function createIssueAction(data: z.infer<typeof createIssueSchema>)
         },
       });
 
-      if (image && image.fileUrl) {
-        await tx.attachment.create({
-          data: {
-            issueId: issue.id,
-            uploadedBy: session.user.id,
-            filename: image.filename,
-            fileUrl: image.fileUrl,
-            size: image.size,
-          },
-        });
+      if (allImages.length > 0) {
+        for (const img of allImages) {
+          if (img.fileUrl) {
+            await tx.attachment.create({
+              data: {
+                issueId: issue.id,
+                uploadedBy: session.user.id,
+                filename: img.filename,
+                fileUrl: img.fileUrl,
+                size: img.size,
+              },
+            });
+          }
+        }
       }
+
+      const historySummary =
+        allImages.length === 1
+          ? `Issue created with attachment (${allImages[0].filename})`
+          : allImages.length > 1
+          ? `Issue created with ${allImages.length} attachments (${allImages.map((i) => i.filename).join(", ")})`
+          : "Issue created";
 
       await writeIssueHistory(tx, issue.id, session.user.id, {
         fieldChanged: "created",
         oldValue: null,
-        newValue: image ? `Issue created with attachment (${image.filename})` : "Issue created",
+        newValue: historySummary,
       });
 
       return issue;
@@ -137,6 +159,161 @@ export async function createIssueAction(data: z.infer<typeof createIssueSchema>)
     return { success: true, data: newIssue };
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : "Failed to create issue";
+    return { success: false, error: message };
+  }
+}
+
+const addIssueAttachmentsSchema = z.object({
+  issueId: z.string(),
+  projectId: z.string(),
+  images: z.array(imageItemSchema).min(1, "At least one image is required"),
+});
+
+export async function addIssueAttachmentsAction(data: z.infer<typeof addIssueAttachmentsSchema>) {
+  try {
+    const session = await requireAuth();
+    const parsed = addIssueAttachmentsSchema.safeParse(data);
+    if (!parsed.success) {
+      return {
+        success: false,
+        error: parsed.error.issues[0]?.message || "Invalid attachments data",
+      };
+    }
+
+    const { issueId, projectId, images } = parsed.data;
+
+    // Verify project access
+    const isAdmin = session.user.role === "ADMIN";
+    const membership = await prisma.projectMember.findUnique({
+      where: {
+        projectId_userId: {
+          projectId,
+          userId: session.user.id,
+        },
+      },
+    });
+
+    if (!isAdmin && !membership) {
+      return { success: false, error: "Access denied: You are not a member of this project" };
+    }
+
+    // Verify issue belongs to this project
+    const issue = await prisma.issue.findFirst({
+      where: {
+        id: issueId,
+        projectId,
+      },
+      select: { id: true, number: true },
+    });
+
+    if (!issue) {
+      return { success: false, error: "Issue not found in this project" };
+    }
+
+    // Create attachments and log history in transaction
+    const createdAttachments = await prisma.$transaction(async (tx) => {
+      const records = [];
+      for (const img of images) {
+        if (img.fileUrl) {
+          const rec = await tx.attachment.create({
+            data: {
+              issueId,
+              uploadedBy: session.user.id,
+              filename: img.filename,
+              fileUrl: img.fileUrl,
+              size: img.size,
+            },
+          });
+          records.push(rec);
+        }
+      }
+
+      const filenames = images.map((i) => i.filename).join(", ");
+      await writeIssueHistory(tx, issueId, session.user.id, {
+        fieldChanged: "attachment",
+        oldValue: null,
+        newValue: `Added ${images.length} attachment(s): ${filenames}`,
+      });
+
+      return records;
+    });
+
+    revalidatePath(`/projects/${projectId}`);
+
+    return {
+      success: true,
+      data: {
+        attachments: createdAttachments.map((a) => ({
+          id: a.id,
+          filename: a.filename,
+          fileUrl: a.fileUrl,
+          size: a.size,
+          uploadedAt: a.uploadedAt.toISOString(),
+        })),
+      },
+    };
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "Failed to upload attachments";
+    return { success: false, error: message };
+  }
+}
+
+export async function deleteIssueAttachmentFromProjectAction(
+  attachmentId: string,
+  projectId: string
+) {
+  try {
+    const session = await requireAuth();
+    const isAdmin = session.user.role === "ADMIN";
+    const membership = await prisma.projectMember.findUnique({
+      where: {
+        projectId_userId: {
+          projectId,
+          userId: session.user.id,
+        },
+      },
+    });
+
+    if (!isAdmin && !membership) {
+      return { success: false, error: "Access denied" };
+    }
+
+    const attachment = await prisma.attachment.findUnique({
+      where: { id: attachmentId },
+      include: {
+        issue: {
+          select: { id: true, projectId: true },
+        },
+      },
+    });
+
+    if (!attachment || attachment.issue.projectId !== projectId) {
+      return { success: false, error: "Attachment not found" };
+    }
+
+    // Only allow uploader, project lead, or admin to delete
+    const isUploader = attachment.uploadedBy === session.user.id;
+    const isLead = membership?.roleInProject === "LEAD";
+    if (!isAdmin && !isUploader && !isLead) {
+      return { success: false, error: "You do not have permission to delete this attachment" };
+    }
+
+    await prisma.$transaction(async (tx) => {
+      await tx.attachment.delete({
+        where: { id: attachmentId },
+      });
+
+      await writeIssueHistory(tx, attachment.issue.id, session.user.id, {
+        fieldChanged: "attachment",
+        oldValue: attachment.filename,
+        newValue: `Deleted attachment (${attachment.filename})`,
+      });
+    });
+
+    revalidatePath(`/projects/${projectId}`);
+    return { success: true };
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "Failed to delete attachment";
     return { success: false, error: message };
   }
 }

@@ -10,6 +10,8 @@ import {
   updateIssueDetailsAction,
   addCommentAction,
   getIssueAuditHistoryAction,
+  addIssueAttachmentsAction,
+  deleteIssueAttachmentFromProjectAction,
 } from "@/app/(dashboard)/projects/[id]/actions";
 import { useRouter } from "next/navigation";
 
@@ -182,10 +184,12 @@ export function IssueWorkspace({
   const [openRowAssigneeId, setOpenRowAssigneeId] = useState<string | null>(null);
   const [landedId, setLandedId] = useState<string | null>(null);
 
-  // Drawer custom dropdowns
+  // Drawer and footer custom dropdowns
   const [drawerStatusOpen, setDrawerStatusOpen] = useState(false);
   const [drawerPriOpen, setDrawerPriOpen] = useState(false);
   const [drawerAssigneeOpen, setDrawerAssigneeOpen] = useState(false);
+  const [footerStatusOpen, setFooterStatusOpen] = useState(false);
+  const [footerAssignOpen, setFooterAssignOpen] = useState(false);
 
   // Developer Status Change Modal with Optional Notes
   const [statusNoteModal, setStatusNoteModal] = useState<{
@@ -209,11 +213,17 @@ export function IssueWorkspace({
   const [newAssigneeId, setNewAssigneeId] = useState("");
   const [createLoading, setCreateLoading] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
-  const [newImage, setNewImage] = useState<{
+  type ImageUploadItem = {
+    id: string;
     filename: string;
     fileUrl: string;
     size: number;
-  } | null>(null);
+  };
+  const [newImages, setNewImages] = useState<ImageUploadItem[]>([]);
+  const [isCompressing, setIsCompressing] = useState(false);
+  const [isUploadingDrawerImages, setIsUploadingDrawerImages] = useState(false);
+  const [drawerUploadError, setDrawerUploadError] = useState<string | null>(null);
+  const [deletingAttachmentId, setDeletingAttachmentId] = useState<string | null>(null);
 
   // Drawer details & audit
   const [auditHistory, setAuditHistory] = useState<
@@ -259,6 +269,8 @@ export function IssueWorkspace({
       setDrawerStatusOpen(false);
       setDrawerPriOpen(false);
       setDrawerAssigneeOpen(false);
+      setFooterStatusOpen(false);
+      setFooterAssignOpen(false);
     }
     window.addEventListener("click", handleClickOutside);
     return () => window.removeEventListener("click", handleClickOutside);
@@ -285,6 +297,25 @@ export function IssueWorkspace({
       });
     }
   }, [selected?.id]);
+
+  // Handle Escape key to close modals
+  useEffect(() => {
+    function handleKeyDown(e: KeyboardEvent) {
+      if (e.key === "Escape") {
+        if (previewImage) {
+          setPreviewImage(null);
+        } else if (statusNoteModal) {
+          setStatusNoteModal(null);
+        } else if (isNewOpen) {
+          setIsNewOpen(false);
+        } else if (selected) {
+          setSelected(null);
+        }
+      }
+    }
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [previewImage, statusNoteModal, isNewOpen, selected]);
 
   // Roles: Tester can raise issues & update status; Developer manages In Progress, Fixed, Rejected
   const isTester = currentUser.roleInProject === "QA" && currentUser.role !== "ADMIN";
@@ -555,59 +586,179 @@ export function IssueWorkspace({
       .slice(0, 3);
   }, [issues]);
 
-  // Image upload handler with client-side compression
-  function handleImageUpload(file: File) {
-    if (!file.type.startsWith("image/")) {
-      setCreateError("Please upload a valid image file (PNG, JPG, WebP, GIF).");
-      return;
-    }
-    if (file.size > 8 * 1024 * 1024) {
-      setCreateError("Image size exceeds 8MB. Please select a smaller file.");
+  // Image compression helper with HTML5 Canvas (max 1280px dimension, JPEG 82%)
+  function compressImageFile(file: File): Promise<ImageUploadItem> {
+    return new Promise((resolve, reject) => {
+      if (!file.type.startsWith("image/")) {
+        return reject(new Error(`"${file.name}" is not an image file (PNG, JPG, WebP, GIF only).`));
+      }
+      if (file.size > 8 * 1024 * 1024) {
+        return reject(new Error(`"${file.name}" exceeds 8MB limit. Please select a smaller photo.`));
+      }
+
+      const reader = new FileReader();
+      reader.onerror = () => reject(new Error(`Failed to read "${file.name}"`));
+      reader.onload = (e) => {
+        const dataUrl = e.target?.result as string;
+        if (!dataUrl) return reject(new Error(`Failed to load "${file.name}"`));
+
+        const img = new Image();
+        img.onerror = () => reject(new Error(`Failed to process "${file.name}"`));
+        img.onload = () => {
+          const maxDim = 1280;
+          let { width, height } = img;
+          if (width > maxDim || height > maxDim) {
+            if (width > height) {
+              height = Math.round((height * maxDim) / width);
+              width = maxDim;
+            } else {
+              width = Math.round((width * maxDim) / height);
+              height = maxDim;
+            }
+          }
+          const canvas = document.createElement("canvas");
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext("2d");
+          if (ctx) {
+            ctx.drawImage(img, 0, 0, width, height);
+            const compressed = canvas.toDataURL("image/jpeg", 0.82);
+            resolve({
+              id: Math.random().toString(36).substring(2, 9) + Date.now().toString(36),
+              filename: file.name.replace(/\.[^/.]+$/, "") + ".jpg",
+              fileUrl: compressed,
+              size: Math.round(compressed.length * 0.75),
+            });
+          } else {
+            resolve({
+              id: Math.random().toString(36).substring(2, 9) + Date.now().toString(36),
+              filename: file.name,
+              fileUrl: dataUrl,
+              size: file.size,
+            });
+          }
+        };
+        img.src = dataUrl;
+      };
+      reader.readAsDataURL(file);
+    });
+  }
+
+  // Batch upload handler for New Issue modal
+  async function handleBatchImageUpload(files: FileList | File[]) {
+    const fileArray = Array.from(files);
+    if (fileArray.length === 0) return;
+
+    if (newImages.length + fileArray.length > 10) {
+      setCreateError(`Maximum 10 photos allowed per issue (${newImages.length} already chosen).`);
       return;
     }
 
     setCreateError(null);
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      const dataUrl = e.target?.result as string;
-      if (!dataUrl) return;
+    setIsCompressing(true);
 
-      const img = new Image();
-      img.onload = () => {
-        const maxDim = 1280;
-        let { width, height } = img;
-        if (width > maxDim || height > maxDim) {
-          if (width > height) {
-            height = Math.round((height * maxDim) / width);
-            width = maxDim;
-          } else {
-            width = Math.round((width * maxDim) / height);
-            height = maxDim;
-          }
+    try {
+      const results: ImageUploadItem[] = [];
+      for (const file of fileArray) {
+        const item = await compressImageFile(file);
+        results.push(item);
+      }
+      setNewImages((prev) => [...prev, ...results]);
+    } catch (err) {
+      setCreateError(err instanceof Error ? err.message : "Failed to process photo(s)");
+    } finally {
+      setIsCompressing(false);
+    }
+  }
+
+  function removeNewImage(id: string) {
+    setNewImages((prev) => prev.filter((img) => img.id !== id));
+  }
+
+  // Drawer batch upload handler for existing issue
+  async function handleDrawerUploadPhotos(files: FileList | File[]) {
+    if (!selected) return;
+    const fileArray = Array.from(files);
+    if (fileArray.length === 0) return;
+
+    if (attachments.length + fileArray.length > 15) {
+      setDrawerUploadError(`Maximum 15 photos allowed per issue (${attachments.length} already attached).`);
+      return;
+    }
+
+    setDrawerUploadError(null);
+    setIsUploadingDrawerImages(true);
+
+    try {
+      const compressedItems: ImageUploadItem[] = [];
+      for (const file of fileArray) {
+        const item = await compressImageFile(file);
+        compressedItems.push(item);
+      }
+
+      const res = await addIssueAttachmentsAction({
+        issueId: selected.id,
+        projectId: project.id,
+        images: compressedItems.map(({ filename, fileUrl, size }) => ({
+          filename,
+          fileUrl,
+          size,
+        })),
+      });
+
+      if (!res.success || !res.data) {
+        setDrawerUploadError(res.error || "Failed to upload attachments");
+      } else {
+        const newAtts = res.data.attachments;
+        setAttachments((prev) => [...newAtts, ...prev]);
+        setIssues((prev) =>
+          prev.map((i) =>
+            i.id === selected.id
+              ? { ...i, attachmentsCount: (i.attachmentsCount || 0) + newAtts.length }
+              : i
+          )
+        );
+        showToast(`Attached ${newAtts.length} photo(s) successfully`);
+        const histRes = await getIssueAuditHistoryAction(selected.id);
+        if (histRes.success && histRes.data) {
+          setAuditHistory(histRes.data.history);
         }
-        const canvas = document.createElement("canvas");
-        canvas.width = width;
-        canvas.height = height;
-        const ctx = canvas.getContext("2d");
-        if (ctx) {
-          ctx.drawImage(img, 0, 0, width, height);
-          const compressed = canvas.toDataURL("image/jpeg", 0.8);
-          setNewImage({
-            filename: file.name.replace(/\.[^/.]+$/, "") + ".jpg",
-            fileUrl: compressed,
-            size: Math.round(compressed.length * 0.75),
-          });
-        } else {
-          setNewImage({
-            filename: file.name,
-            fileUrl: dataUrl,
-            size: file.size,
-          });
+      }
+    } catch (err) {
+      setDrawerUploadError(err instanceof Error ? err.message : "Failed to process photo(s)");
+    } finally {
+      setIsUploadingDrawerImages(false);
+    }
+  }
+
+  async function handleDeleteAttachment(attachmentId: string, filename: string) {
+    if (!selected) return;
+    if (!confirm(`Delete attachment "${filename}"?`)) return;
+    setDeletingAttachmentId(attachmentId);
+    try {
+      const res = await deleteIssueAttachmentFromProjectAction(attachmentId, project.id);
+      if (res.success) {
+        setAttachments((prev) => prev.filter((a) => a.id !== attachmentId));
+        setIssues((prev) =>
+          prev.map((i) =>
+            i.id === selected.id
+              ? { ...i, attachmentsCount: Math.max(0, (i.attachmentsCount || 1) - 1) }
+              : i
+          )
+        );
+        showToast("Attachment deleted");
+        const histRes = await getIssueAuditHistoryAction(selected.id);
+        if (histRes.success && histRes.data) {
+          setAuditHistory(histRes.data.history);
         }
-      };
-      img.src = dataUrl;
-    };
-    reader.readAsDataURL(file);
+      } else {
+        showToast(res.error || "Failed to delete attachment");
+      }
+    } catch (err) {
+      showToast("Error deleting attachment");
+    } finally {
+      setDeletingAttachmentId(null);
+    }
   }
 
   // Handlers
@@ -636,7 +787,7 @@ export function IssueWorkspace({
       severity: newSev,
       priority: newPri,
       assigneeId: newAssigneeId,
-      image: newImage || undefined,
+      images: newImages.map(({ filename, fileUrl, size }) => ({ filename, fileUrl, size })),
     });
 
     setCreateLoading(false);
@@ -669,7 +820,7 @@ export function IssueWorkspace({
           updatedAt: "Just now",
           createdAt: new Date().toISOString(),
           commentsCount: 0,
-          attachmentsCount: newImage ? 1 : 0,
+          attachmentsCount: newImages.length,
         };
         setIssues((prev) => [newItem, ...prev]);
         setSelected(newItem);
@@ -680,7 +831,7 @@ export function IssueWorkspace({
       setNewExpected("");
       setNewActual("");
       setNewEnv("");
-      setNewImage(null);
+      setNewImages([]);
       setNewAssigneeId(developers[0]?.userId || "");
       showToast("Issue created successfully");
       router.refresh();
@@ -1358,8 +1509,8 @@ export function IssueWorkspace({
                 <span className="row-id mono">{issue.key}</span>
 
                 {/* Issue Title */}
-                <span className="row-title" title={issue.title} style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-                  <span>{issue.title}</span>
+                <span className="row-title" title={issue.title} style={{ display: "inline-flex", alignItems: "center", gap: 6, minWidth: 0, overflow: "hidden" }}>
+                  <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{issue.title}</span>
                   {Boolean(issue.attachmentsCount && issue.attachmentsCount > 0) && (
                     <span
                       title={`${issue.attachmentsCount} attachment(s)`}
@@ -1373,6 +1524,7 @@ export function IssueWorkspace({
                         background: "var(--surface-hover)",
                         color: "var(--text-dim)",
                         border: "1px solid var(--border)",
+                        flexShrink: 0,
                       }}
                     >
                       📎 {issue.attachmentsCount}
@@ -1579,43 +1731,488 @@ export function IssueWorkspace({
         )}
       </div>
 
-      {/* SLIDE-OVER DRAWER (Template Structure) */}
-      <div
-        className={`drawer-overlay ${selected ? "open" : ""}`}
-        id="drawerOverlay"
-        onClick={() => setSelected(null)}
-      />
-
-      <div className={`drawer ${selected ? "open" : ""}`} id="drawer">
-        {selected && (
-          <>
-            <div className="drawer-head">
+      {/* CENTERED ISSUE DETAILS MODAL */}
+      {mounted && selected && createPortal(
+        <div
+          className="issue-modal-overlay"
+          id="issueModalOverlay"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setSelected(null);
+          }}
+        >
+          <div
+            className="issue-modal"
+            id="issueModal"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* DOCKED HEADER */}
+            <div className="issue-modal-head">
               <div className="top-row">
-                <span className="drawer-id mono" id="drawerId">
-                  {selected.key}
-                </span>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                  <span className="drawer-id mono" id="drawerId" style={{ fontSize: 13, fontWeight: 700, padding: "3px 9px", background: "var(--surface-2)", borderRadius: 6, border: "1px solid var(--border)", color: "var(--text)" }}>
+                    {selected.key}
+                  </span>
+                  <span
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: 6,
+                      fontSize: 12,
+                      fontWeight: 600,
+                      padding: "3px 9px",
+                      borderRadius: 6,
+                      background: "var(--surface-2)",
+                      border: "1px solid var(--border)",
+                    }}
+                  >
+                    <span className="dd-dot" style={{ background: getStatusDotColor(selected.status) }} />
+                    {getStatusLabel(selected.status)}
+                  </span>
+                  <span
+                    style={{
+                      fontSize: 11,
+                      fontWeight: 700,
+                      padding: "3px 8px",
+                      borderRadius: 6,
+                      background:
+                        selected.priority === "URGENT" || selected.priority === "HIGH"
+                          ? "var(--crit-soft)"
+                          : selected.priority === "MEDIUM"
+                          ? "var(--warn-soft)"
+                          : "var(--ok-soft)",
+                      color:
+                        selected.priority === "URGENT" || selected.priority === "HIGH"
+                          ? "var(--crit)"
+                          : selected.priority === "MEDIUM"
+                          ? "var(--warn)"
+                          : "var(--ok)",
+                      border: "1px solid currentColor",
+                    }}
+                  >
+                    {selected.priority}
+                  </span>
+                  <span className="attn-tag" style={{ margin: 0 }}>
+                    {selected.severity.toLowerCase()}
+                  </span>
+                  <span className="attn-tag" style={{ margin: 0 }}>
+                    {selected.environment || project.key.toLowerCase()}
+                  </span>
+                </div>
+
                 <button
                   type="button"
                   className="close-btn"
                   id="drawerClose"
+                  title="Close (Esc)"
                   onClick={() => setSelected(null)}
+                  style={{
+                    width: 32,
+                    height: 32,
+                    borderRadius: 8,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    cursor: "pointer",
+                  }}
                 >
-                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
                     <path d="M18 6L6 18M6 6l12 12" />
                   </svg>
                 </button>
               </div>
-              <h3 id="drawerTitle">{selected.title}</h3>
+
+              {/* ISSUE TITLE - FULLY VISIBLE, WRAPPING, NEVER CUT OFF */}
+              <h2 className="issue-modal-title" id="drawerTitle">
+                {selected.title}
+              </h2>
             </div>
 
-            <div className="drawer-body">
-              {/* Meta Grid with Dropdowns */}
-              <div className="meta-grid">
+            {/* MODAL BODY (SPACIOUS 2-COLUMN LAYOUT) */}
+            <div className="issue-modal-body">
+              {/* LEFT MAIN CONTENT COLUMN */}
+              <div style={{ display: "flex", flexDirection: "column", gap: 20, minWidth: 0 }}>
+                {/* Role-Specific status notice */}
+                {isDev && selected.status === "FIXED" && (
+                  <div
+                    style={{
+                      fontSize: 12,
+                      color: "var(--ok)",
+                      background: "var(--ok-soft)",
+                      padding: "8px 12px",
+                      borderRadius: 8,
+                      fontWeight: 600,
+                    }}
+                  >
+                    ✓ Code marked as Fixed. Awaiting QA / Tester verification.
+                  </div>
+                )}
+
+                {isQA && selected.status === "IN_PROGRESS" && (
+                  <div
+                    style={{
+                      fontSize: 12,
+                      color: "var(--info)",
+                      background: "var(--info-soft)",
+                      padding: "8px 12px",
+                      borderRadius: 8,
+                      fontWeight: 600,
+                    }}
+                  >
+                    ⚙ Developer is actively working on the fix.
+                  </div>
+                )}
+
+                {/* Description */}
+                <div>
+                  <div className="sec-title" style={{ marginTop: 0 }}>Description</div>
+                  <p className="desc" style={{ whiteSpace: "pre-wrap" }}>
+                    {selected.description || "No description provided for this issue."}
+                  </p>
+                </div>
+
+                {/* Steps to Reproduce */}
+                {selected.stepsToReproduce && (
+                  <div>
+                    <div className="sec-title">Steps to Reproduce</div>
+                    <pre
+                      className="mono"
+                      style={{
+                        background: "var(--surface-2)",
+                        border: "1px solid var(--border)",
+                        padding: "12px 14px",
+                        borderRadius: 8,
+                        fontSize: 12,
+                        whiteSpace: "pre-wrap",
+                        margin: 0,
+                        lineHeight: 1.6,
+                      }}
+                    >
+                      {selected.stepsToReproduce}
+                    </pre>
+                  </div>
+                )}
+
+                {/* Expected & Actual */}
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+                  <div style={{ background: "var(--ok-soft)", border: "1px solid var(--ok-bd, rgba(52, 211, 153, 0.2))", padding: 14, borderRadius: 8 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 10.5, fontWeight: 700, color: "var(--ok)", textTransform: "uppercase" }}>
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                        <polyline points="20 6 9 17 4 12" />
+                      </svg>
+                      Expected Result
+                    </div>
+                    <div style={{ fontSize: 12.5, marginTop: 6, lineHeight: 1.5, whiteSpace: "pre-wrap", color: selected.expected ? "var(--text)" : "var(--text-faint)", fontStyle: selected.expected ? "normal" : "italic" }}>
+                      {selected.expected || "Not specified"}
+                    </div>
+                  </div>
+
+                  <div style={{ background: "var(--crit-soft)", border: "1px solid var(--crit-bd, rgba(239, 68, 68, 0.2))", padding: 14, borderRadius: 8 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 10.5, fontWeight: 700, color: "var(--crit)", textTransform: "uppercase" }}>
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                        <circle cx="12" cy="12" r="10" />
+                        <line x1="15" y1="9" x2="9" y2="15" />
+                        <line x1="9" y1="9" x2="15" y2="15" />
+                      </svg>
+                      Actual Result
+                    </div>
+                    <div style={{ fontSize: 12.5, marginTop: 6, lineHeight: 1.5, whiteSpace: "pre-wrap", color: selected.actual ? "var(--text)" : "var(--text-faint)", fontStyle: selected.actual ? "normal" : "italic" }}>
+                      {selected.actual || "Not specified"}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Attachments & Screenshots */}
+                <div>
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                    <div className="sec-title" style={{ display: "flex", alignItems: "center", gap: 6, margin: 0 }}>
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+                        <circle cx="8.5" cy="8.5" r="1.5" />
+                        <polyline points="21 15 16 10 5 21" />
+                      </svg>
+                      <span>Attachments & Screenshots ({attachments.length})</span>
+                    </div>
+                    <label
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 5,
+                        fontSize: 11,
+                        fontWeight: 600,
+                        color: "var(--accent)",
+                        cursor: isUploadingDrawerImages ? "not-allowed" : "pointer",
+                        padding: "4px 10px",
+                        borderRadius: 6,
+                        background: "var(--surface-2)",
+                        border: "1px solid var(--border)",
+                      }}
+                    >
+                      <input
+                        type="file"
+                        accept="image/*"
+                        multiple
+                        disabled={isUploadingDrawerImages}
+                        style={{ display: "none" }}
+                        onChange={(e) => {
+                          if (e.target.files && e.target.files.length > 0) {
+                            handleDrawerUploadPhotos(e.target.files);
+                            e.target.value = "";
+                          }
+                        }}
+                      />
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                        <line x1="12" y1="5" x2="12" y2="19" />
+                        <line x1="5" y1="12" x2="19" y2="12" />
+                      </svg>
+                      <span>{isUploadingDrawerImages ? "Uploading..." : "Upload Photos"}</span>
+                    </label>
+                  </div>
+
+                  {drawerUploadError && (
+                    <div style={{ fontSize: 11, color: "var(--crit)", marginTop: 6 }}>
+                      {drawerUploadError}
+                    </div>
+                  )}
+
+                  {attachments.length === 0 ? (
+                    <div
+                      style={{
+                        marginTop: 10,
+                        padding: "16px",
+                        border: "1px dashed var(--border)",
+                        borderRadius: 8,
+                        background: "var(--surface-2)",
+                        textAlign: "center",
+                      }}
+                    >
+                      <div style={{ fontSize: 12, color: "var(--text-faint)" }}>
+                        No photos attached yet.
+                      </div>
+                      <label
+                        style={{
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: 6,
+                          marginTop: 6,
+                          fontSize: 12,
+                          fontWeight: 600,
+                          color: "var(--accent)",
+                          cursor: isUploadingDrawerImages ? "not-allowed" : "pointer",
+                        }}
+                      >
+                        <input
+                          type="file"
+                          accept="image/*"
+                          multiple
+                          disabled={isUploadingDrawerImages}
+                          style={{ display: "none" }}
+                          onChange={(e) => {
+                            if (e.target.files && e.target.files.length > 0) {
+                              handleDrawerUploadPhotos(e.target.files);
+                              e.target.value = "";
+                            }
+                          }}
+                        />
+                        <span>Click to upload screenshots or bug photos</span>
+                      </label>
+                    </div>
+                  ) : (
+                    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(130px, 1fr))", gap: 10, marginTop: 10 }}>
+                      {attachments.map((att) => (
+                        <div
+                          key={att.id}
+                          style={{
+                            background: "var(--surface-2)",
+                            border: "1px solid var(--border)",
+                            borderRadius: 8,
+                            overflow: "hidden",
+                            position: "relative",
+                            transition: "transform 0.15s, border-color 0.15s",
+                          }}
+                          onMouseEnter={(e) => {
+                            e.currentTarget.style.transform = "translateY(-2px)";
+                            e.currentTarget.style.borderColor = "var(--accent)";
+                          }}
+                          onMouseLeave={(e) => {
+                            e.currentTarget.style.transform = "none";
+                            e.currentTarget.style.borderColor = "var(--border)";
+                          }}
+                        >
+                          <div
+                            onClick={() => setPreviewImage({ url: att.fileUrl, filename: att.filename })}
+                            style={{
+                              width: "100%",
+                              height: 85,
+                              background: "rgba(0,0,0,0.04)",
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              overflow: "hidden",
+                              cursor: "pointer",
+                            }}
+                          >
+                            <img
+                              src={att.fileUrl}
+                              alt={att.filename}
+                              style={{ width: "100%", height: "100%", objectFit: "cover" }}
+                            />
+                          </div>
+                          <div style={{ padding: "6px 8px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                            <div
+                              onClick={() => setPreviewImage({ url: att.fileUrl, filename: att.filename })}
+                              style={{ flex: 1, minWidth: 0, cursor: "pointer" }}
+                            >
+                              <div style={{ fontSize: 11, fontWeight: 600, color: "var(--text)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                                {att.filename}
+                              </div>
+                              <div style={{ fontSize: 10, color: "var(--text-faint)", marginTop: 1 }}>
+                                {(att.size / 1024).toFixed(0)} KB
+                              </div>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleDeleteAttachment(att.id, att.filename);
+                              }}
+                              disabled={deletingAttachmentId === att.id}
+                              style={{
+                                background: "none",
+                                border: "none",
+                                color: "var(--text-dim)",
+                                cursor: "pointer",
+                                padding: 3,
+                                marginLeft: 4,
+                                display: "flex",
+                                alignItems: "center",
+                              }}
+                              title="Delete photo"
+                              onMouseEnter={(e) => (e.currentTarget.style.color = "var(--crit)")}
+                              onMouseLeave={(e) => (e.currentTarget.style.color = "var(--text-dim)")}
+                            >
+                              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                <line x1="18" y1="6" x2="6" y2="18" />
+                                <line x1="6" y1="6" x2="18" y2="18" />
+                              </svg>
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* Discussion / Comments */}
+                <div>
+                  <div className="sec-title" style={{ display: "flex", alignItems: "center", gap: 6, margin: "14px 0 10px" }}>
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+                    </svg>
+                    <span>Discussion ({comments.length})</span>
+                  </div>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 14 }}>
+                    {comments.map((c) => (
+                      <div
+                        key={c.id}
+                        style={{
+                          background: "var(--surface-2)",
+                          border: "1px solid var(--border)",
+                          padding: 12,
+                          borderRadius: 8,
+                          fontSize: 12.5,
+                        }}
+                      >
+                        <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
+                          <span style={{ fontWeight: 600 }}>{c.user.name}</span>
+                          <span style={{ fontSize: 10.5, color: "var(--text-faint)" }}>
+                            {new Date(c.createdAt).toLocaleString()}
+                          </span>
+                        </div>
+                        <div style={{ color: "var(--text-dim)", whiteSpace: "pre-wrap" }}>{c.body}</div>
+                      </div>
+                    ))}
+                    {comments.length === 0 && (
+                      <div style={{ fontSize: 12, color: "var(--text-faint)", fontStyle: "italic" }}>
+                        No comments yet. Start the discussion below.
+                      </div>
+                    )}
+                  </div>
+
+                  <form onSubmit={handleAddComment} className="comment-box">
+                    <div
+                      className="mini-avatar"
+                      style={{ background: "#0F7A73", width: 26, height: 26, fontSize: 11 }}
+                    >
+                      {currentUser.name?.charAt(0) || "U"}
+                    </div>
+                    <div style={{ flex: 1 }}>
+                      <textarea
+                        className="comment-input"
+                        rows={2}
+                        placeholder="Add a comment…"
+                        value={newComment}
+                        onChange={(e) => setNewComment(e.target.value)}
+                      />
+                      <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 6 }}>
+                        <button
+                          type="submit"
+                          disabled={commentLoading || !newComment.trim()}
+                          className="btn-primary"
+                          style={{ fontSize: 11.5, padding: "6px 14px" }}
+                        >
+                          {commentLoading ? "Posting…" : "Comment"}
+                        </button>
+                      </div>
+                    </div>
+                  </form>
+                </div>
+
+                {/* Activity / Audit Timeline */}
+                <div>
+                  <div className="sec-title" style={{ display: "flex", alignItems: "center", gap: 6, margin: "14px 0 10px" }}>
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <circle cx="12" cy="12" r="10" />
+                      <polyline points="12 6 12 12 16 14" />
+                    </svg>
+                    <span>Activity History</span>
+                  </div>
+                  <div className="timeline" id="drawerTimeline">
+                    {auditHistory.map((h) => (
+                      <div key={h.id} className="tl-item">
+                        <div className="tl-dot" />
+                        <div>
+                          <div className="tl-text">
+                            <b>{h.userName}</b> changed <b>{h.fieldChanged}</b>
+                            {h.oldValue && <> from <s>{h.oldValue}</s></>}
+                            {h.newValue && <> to <b>{h.newValue}</b></>}
+                          </div>
+                          <div className="tl-time">
+                            {new Date(h.changedAt).toLocaleString()}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                    {auditHistory.length === 0 && (
+                      <div style={{ fontSize: 12, color: "var(--text-faint)" }}>
+                        No audit records yet.
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* RIGHT SIDEBAR METADATA COLUMN */}
+              <div className="issue-modal-sidebar">
+                <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", color: "var(--text-faint)", paddingBottom: 4, borderBottom: "1px solid var(--border)" }}>
+                  Issue Properties
+                </div>
+
                 {/* Status Dropdown */}
                 <div className={`meta-item ${drawerStatusOpen ? "open" : ""}`} id="statusDD" onClick={(e) => e.stopPropagation()}>
                   <div className="ml">Status</div>
                   <div
                     className="meta-select"
+                    style={{ width: "100%", justifyContent: "space-between" }}
                     onClick={(e) => {
                       e.stopPropagation();
                       setDrawerStatusOpen(!drawerStatusOpen);
@@ -1623,44 +2220,46 @@ export function IssueWorkspace({
                       setDrawerAssigneeOpen(false);
                     }}
                   >
-                    <span
-                      className="dd-dot"
-                      style={{ background: getStatusDotColor(selected.status) }}
-                    />
-                    <span id="statusLabel">{getStatusLabel(selected.status)}</span>
+                    <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
+                      <span
+                        className="dd-dot"
+                        style={{ background: getStatusDotColor(selected.status) }}
+                      />
+                      <span id="statusLabel">{getStatusLabel(selected.status)}</span>
+                    </div>
                     <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
                       <path d="M6 9l6 6 6-6" />
                     </svg>
                   </div>
 
-                      {drawerStatusOpen && (
-                        <div className="dd-menu">
-                          {getTransitionsForIssue(selected).length === 0 ? (
-                            <div style={{ padding: "6px 8px", fontSize: 11, color: "var(--text-faint)" }}>
-                              No allowed transitions
-                            </div>
-                          ) : (
-                            getTransitionsForIssue(selected).map((target) => (
-                              <div
-                                key={target}
-                                className="dd-item"
-                                onClick={() => {
-                                  setDrawerStatusOpen(false);
-                                  requestStatusChange(
-                                    selected.id,
-                                    selected.key,
-                                    selected.title,
-                                    target
-                                  );
-                                }}
-                              >
-                                <span className="dd-dot" style={{ background: getStatusDotColor(target) }} />
-                                <span>{getStatusLabel(target)}</span>
-                              </div>
-                            ))
-                          )}
+                  {drawerStatusOpen && (
+                    <div className="dd-menu" style={{ width: "100%" }}>
+                      {getTransitionsForIssue(selected).length === 0 ? (
+                        <div style={{ padding: "6px 8px", fontSize: 11, color: "var(--text-faint)" }}>
+                          No allowed transitions
                         </div>
+                      ) : (
+                        getTransitionsForIssue(selected).map((target) => (
+                          <div
+                            key={target}
+                            className="dd-item"
+                            onClick={() => {
+                              setDrawerStatusOpen(false);
+                              requestStatusChange(
+                                selected.id,
+                                selected.key,
+                                selected.title,
+                                target
+                              );
+                            }}
+                          >
+                            <span className="dd-dot" style={{ background: getStatusDotColor(target) }} />
+                            <span>{getStatusLabel(target)}</span>
+                          </div>
+                        ))
                       )}
+                    </div>
+                  )}
                 </div>
 
                 {/* Priority Dropdown */}
@@ -1669,6 +2268,8 @@ export function IssueWorkspace({
                   <div
                     className="meta-select"
                     style={{
+                      width: "100%",
+                      justifyContent: "space-between",
                       color:
                         selected.priority === "URGENT" || selected.priority === "HIGH"
                           ? "var(--crit)"
@@ -1690,7 +2291,7 @@ export function IssueWorkspace({
                   </div>
 
                   {drawerPriOpen && (
-                    <div className="dd-menu">
+                    <div className="dd-menu" style={{ width: "100%" }}>
                       <div className="dd-item" style={{ color: "var(--ok)" }} onClick={() => { setDrawerPriOpen(false); handleUpdatePriority("LOW"); }}>
                         Low
                       </div>
@@ -1707,11 +2308,12 @@ export function IssueWorkspace({
                   )}
                 </div>
 
-                {/* Assignee Dropdown (strictly developers) */}
+                {/* Assignee Dropdown */}
                 <div className={`meta-item ${drawerAssigneeOpen ? "open" : ""}`} id="assigneeDD" onClick={(e) => e.stopPropagation()}>
                   <div className="ml">Assignee (Developer)</div>
                   <div
                     className="meta-select"
+                    style={{ width: "100%", justifyContent: "space-between" }}
                     onClick={(e) => {
                       e.stopPropagation();
                       setDrawerAssigneeOpen(!drawerAssigneeOpen);
@@ -1719,25 +2321,30 @@ export function IssueWorkspace({
                       setDrawerPriOpen(false);
                     }}
                   >
-                    <div
-                      className="mini-avatar"
-                      style={{
-                        background:
-                          selected.assigneeName === "Unassigned"
-                            ? "var(--text-faint)"
-                            : "#0F7A73",
-                      }}
-                    >
-                      {selected.assigneeName.charAt(0)}
+                    <div style={{ display: "flex", alignItems: "center", gap: 7, minWidth: 0, overflow: "hidden" }}>
+                      <div
+                        className="mini-avatar"
+                        style={{
+                          background:
+                            selected.assigneeName === "Unassigned"
+                              ? "var(--text-faint)"
+                              : "#0F7A73",
+                          flexShrink: 0,
+                        }}
+                      >
+                        {selected.assigneeName.charAt(0)}
+                      </div>
+                      <span id="assigneeLabel" style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                        {selected.assigneeName}
+                      </span>
                     </div>
-                    <span id="assigneeLabel">{selected.assigneeName}</span>
-                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" style={{ flexShrink: 0 }}>
                       <path d="M6 9l6 6 6-6" />
                     </svg>
                   </div>
 
                   {drawerAssigneeOpen && (
-                    <div className="dd-menu">
+                    <div className="dd-menu" style={{ width: "100%" }}>
                       <div
                         className="dd-item"
                         onClick={() => {
@@ -1771,25 +2378,28 @@ export function IssueWorkspace({
                   )}
                 </div>
 
+                {/* Reporter */}
                 <div className="meta-item">
                   <div className="ml">Reporter</div>
-                  <div className="meta-select" style={{ cursor: "default" }}>
+                  <div className="meta-select" style={{ cursor: "default", width: "100%" }}>
                     <div className="mini-avatar" style={{ background: "#3E8FE0" }}>
                       {selected.reporterName.charAt(0)}
                     </div>
-                    {selected.reporterName}
+                    <span>{selected.reporterName}</span>
                   </div>
                 </div>
 
+                {/* Created & Updated */}
                 <div className="meta-item">
                   <div className="ml">Created</div>
-                  <div style={{ fontSize: 13, fontWeight: 600 }}>
+                  <div style={{ fontSize: 12.5, fontWeight: 600, color: "var(--text)" }}>
                     {selected.createdAt
                       ? new Date(selected.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
                       : "Recently"}
                   </div>
                 </div>
 
+                {/* Tags / Environment */}
                 <div className="meta-item">
                   <div className="ml">Tags</div>
                   <div className="tags-row">
@@ -1798,262 +2408,168 @@ export function IssueWorkspace({
                   </div>
                 </div>
               </div>
+            </div>
 
-              {/* Role-Specific status notice */}
-              {isDev && selected.status === "FIXED" && (
-                <div
-                  style={{
-                    fontSize: 12,
-                    color: "var(--ok)",
-                    background: "var(--ok-soft)",
-                    padding: "8px 12px",
-                    borderRadius: 8,
-                    marginBottom: 16,
-                    fontWeight: 600,
+            {/* MODAL FOOTER */}
+            <div className="issue-modal-footer">
+              {/* Footer Assign Button & Popover */}
+              <div style={{ position: "relative" }}>
+                <button
+                  type="button"
+                  className="btn-ghost"
+                  id="footerAssign"
+                  style={{ flex: "initial", minWidth: 125, cursor: "pointer" }}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setFooterAssignOpen((prev) => !prev);
+                    setFooterStatusOpen(false);
                   }}
                 >
-                  ✓ Code marked as Fixed. Awaiting QA / Tester verification.
-                </div>
-              )}
-
-              {isQA && selected.status === "IN_PROGRESS" && (
-                <div
-                  style={{
-                    fontSize: 12,
-                    color: "var(--info)",
-                    background: "var(--info-soft)",
-                    padding: "8px 12px",
-                    borderRadius: 8,
-                    marginBottom: 16,
-                    fontWeight: 600,
-                  }}
-                >
-                  ⚙ Developer is actively working on the fix.
-                </div>
-              )}
-
-              {/* Description */}
-              <div className="sec-title">Description</div>
-              <p className="desc">
-                {selected.description || "No description provided for this issue."}
-              </p>
-
-              {/* Steps to Reproduce */}
-              {selected.stepsToReproduce && (
-                <>
-                  <div className="sec-title">Steps to Reproduce</div>
-                  <pre
-                    className="mono"
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <circle cx="12" cy="8" r="4" />
+                    <path d="M4 21v-1a7 7 0 0 1 14 0v1" />
+                  </svg>
+                  <span>Assign</span>
+                  <svg
+                    width="10"
+                    height="10"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2.5"
                     style={{
-                      background: "var(--surface-2)",
-                      border: "1px solid var(--border)",
-                      padding: 10,
-                      borderRadius: 8,
-                      fontSize: 12,
-                      whiteSpace: "pre-wrap",
-                      margin: 0,
+                      marginLeft: 2,
+                      transform: footerAssignOpen ? "rotate(180deg)" : "none",
+                      transition: "transform .15s",
                     }}
                   >
-                    {selected.stepsToReproduce}
-                  </pre>
-                </>
-              )}
+                    <path d="M6 9l6 6 6-6" />
+                  </svg>
+                </button>
 
-              {/* Expected & Actual */}
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginTop: 14 }}>
-                <div style={{ background: "var(--ok-soft)", border: "1px solid var(--ok-bd, rgba(52, 211, 153, 0.2))", padding: 12, borderRadius: 8 }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 10.5, fontWeight: 700, color: "var(--ok)", textTransform: "uppercase" }}>
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                      <polyline points="20 6 9 17 4 12" />
-                    </svg>
-                    Expected Result
-                  </div>
-                  <div style={{ fontSize: 12.5, marginTop: 4, lineHeight: 1.5, whiteSpace: "pre-wrap", color: selected.expected ? "var(--text)" : "var(--text-faint)", fontStyle: selected.expected ? "normal" : "italic" }}>
-                    {selected.expected || "Not specified"}
-                  </div>
-                </div>
-
-                <div style={{ background: "var(--crit-soft)", border: "1px solid var(--crit-bd, rgba(239, 68, 68, 0.2))", padding: 12, borderRadius: 8 }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 10.5, fontWeight: 700, color: "var(--crit)", textTransform: "uppercase" }}>
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                      <circle cx="12" cy="12" r="10" />
-                      <line x1="15" y1="9" x2="9" y2="15" />
-                      <line x1="9" y1="9" x2="15" y2="15" />
-                    </svg>
-                    Actual Result
-                  </div>
-                  <div style={{ fontSize: 12.5, marginTop: 4, lineHeight: 1.5, whiteSpace: "pre-wrap", color: selected.actual ? "var(--text)" : "var(--text-faint)", fontStyle: selected.actual ? "normal" : "italic" }}>
-                    {selected.actual || "Not specified"}
-                  </div>
-                </div>
-              </div>
-
-              {/* Attachments & Screenshots */}
-              {attachments.length > 0 && (
-                <div style={{ marginTop: 16 }}>
-                  <div className="sec-title" style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                      <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
-                      <circle cx="8.5" cy="8.5" r="1.5" />
-                      <polyline points="21 15 16 10 5 21" />
-                    </svg>
-                    <span>Attachments & Screenshots ({attachments.length})</span>
-                  </div>
-                  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(130px, 1fr))", gap: 10, marginTop: 8 }}>
-                    {attachments.map((att) => (
-                      <div
-                        key={att.id}
-                        onClick={() => setPreviewImage({ url: att.fileUrl, filename: att.filename })}
-                        style={{
-                          background: "var(--surface-2)",
-                          border: "1px solid var(--border)",
-                          borderRadius: 8,
-                          overflow: "hidden",
-                          cursor: "pointer",
-                          transition: "transform 0.15s, border-color 0.15s",
-                        }}
-                        onMouseEnter={(e) => {
-                          e.currentTarget.style.transform = "translateY(-2px)";
-                          e.currentTarget.style.borderColor = "var(--accent)";
-                        }}
-                        onMouseLeave={(e) => {
-                          e.currentTarget.style.transform = "none";
-                          e.currentTarget.style.borderColor = "var(--border)";
+                {footerAssignOpen && (
+                  <div
+                    className="footer-popover-menu"
+                    style={{ left: 0 }}
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <div style={{ padding: "6px 8px", fontSize: 10.5, fontWeight: 700, color: "var(--text-faint)", textTransform: "uppercase", letterSpacing: "0.05em", borderBottom: "1px solid var(--border)", marginBottom: 4 }}>
+                      Assign Developer
+                    </div>
+                    <button
+                      type="button"
+                      className="dd-item"
+                      style={{ width: "100%", background: "none", border: "none", textAlign: "left" }}
+                      onClick={() => {
+                        setFooterAssignOpen(false);
+                        handleReassign(selected.id, "");
+                      }}
+                    >
+                      <div className="mini-avatar" style={{ background: "var(--text-faint)", width: 18, height: 18, fontSize: 8 }}>
+                        –
+                      </div>
+                      <span>Unassigned</span>
+                    </button>
+                    {developers.map((d) => (
+                      <button
+                        key={d.userId}
+                        type="button"
+                        className="dd-item"
+                        style={{ width: "100%", background: "none", border: "none", textAlign: "left" }}
+                        onClick={() => {
+                          setFooterAssignOpen(false);
+                          handleReassign(selected.id, d.userId);
                         }}
                       >
-                        <div style={{ width: "100%", height: 85, background: "rgba(0,0,0,0.04)", display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
-                          <img
-                            src={att.fileUrl}
-                            alt={att.filename}
-                            style={{ width: "100%", height: "100%", objectFit: "cover" }}
-                          />
+                        <div className="mini-avatar" style={{ background: "#0F7A73", width: 18, height: 18, fontSize: 8 }}>
+                          {d.name.charAt(0)}
                         </div>
-                        <div style={{ padding: "6px 8px" }}>
-                          <div style={{ fontSize: 11, fontWeight: 600, color: "var(--text)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                            {att.filename}
-                          </div>
-                          <div style={{ fontSize: 10, color: "var(--text-faint)", marginTop: 1 }}>
-                            {(att.size / 1024).toFixed(0)} KB · Click to enlarge
-                          </div>
-                        </div>
-                      </div>
+                        <span>
+                          {d.name} {d.roleInProject === "LEAD" ? "(Lead)" : ""}
+                        </span>
+                      </button>
                     ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Activity / Audit Timeline */}
-              <div className="sec-title">Activity</div>
-              <div className="timeline" id="drawerTimeline">
-                {auditHistory.map((h) => (
-                  <div key={h.id} className="tl-item">
-                    <div className="tl-dot" />
-                    <div>
-                      <div className="tl-text">
-                        <b>{h.userName}</b> changed <b>{h.fieldChanged}</b>
-                        {h.oldValue && <> from <s>{h.oldValue}</s></>}
-                        {h.newValue && <> to <b>{h.newValue}</b></>}
-                      </div>
-                      <div className="tl-time">
-                        {new Date(h.changedAt).toLocaleString()}
-                      </div>
-                    </div>
-                  </div>
-                ))}
-                {auditHistory.length === 0 && (
-                  <div style={{ fontSize: 12, color: "var(--text-faint)" }}>
-                    No audit records yet.
                   </div>
                 )}
               </div>
 
-              {/* Discussion / Comments */}
-              <div className="sec-title">Discussion ({comments.length})</div>
-              <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 14 }}>
-                {comments.map((c) => (
-                  <div
-                    key={c.id}
+              {/* Footer Change Status Button & Popover */}
+              <div style={{ position: "relative" }}>
+                <button
+                  type="button"
+                  className="btn-primary"
+                  id="footerStatus"
+                  style={{ flex: "initial", minWidth: 145, cursor: "pointer" }}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setFooterStatusOpen((prev) => !prev);
+                    setFooterAssignOpen(false);
+                  }}
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                    <path d="M20 6L9 17l-5-5" />
+                  </svg>
+                  <span>Change status</span>
+                  <svg
+                    width="10"
+                    height="10"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2.5"
                     style={{
-                      background: "var(--surface-2)",
-                      border: "1px solid var(--border)",
-                      padding: 10,
-                      borderRadius: 8,
-                      fontSize: 12.5,
+                      marginLeft: 2,
+                      transform: footerStatusOpen ? "rotate(180deg)" : "none",
+                      transition: "transform .15s",
                     }}
                   >
-                    <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
-                      <span style={{ fontWeight: 600 }}>{c.user.name}</span>
-                      <span style={{ fontSize: 10.5, color: "var(--text-faint)" }}>
-                        {new Date(c.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
-                      </span>
+                    <path d="M6 9l6 6 6-6" />
+                  </svg>
+                </button>
+
+                {footerStatusOpen && (
+                  <div
+                    className="footer-popover-menu"
+                    style={{ right: 0 }}
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <div style={{ padding: "6px 8px", fontSize: 10.5, fontWeight: 700, color: "var(--text-faint)", textTransform: "uppercase", letterSpacing: "0.05em", borderBottom: "1px solid var(--border)", marginBottom: 4 }}>
+                      Select New Status
                     </div>
-                    <div style={{ color: "var(--text-dim)", whiteSpace: "pre-wrap" }}>{c.body}</div>
+                    {getTransitionsForIssue(selected).length === 0 ? (
+                      <div style={{ padding: "8px 10px", fontSize: 11.5, color: "var(--text-faint)" }}>
+                        No allowed transitions for your role
+                      </div>
+                    ) : (
+                      getTransitionsForIssue(selected).map((target) => (
+                        <button
+                          key={target}
+                          type="button"
+                          className="dd-item"
+                          style={{ width: "100%", background: "none", border: "none", textAlign: "left" }}
+                          onClick={() => {
+                            setFooterStatusOpen(false);
+                            requestStatusChange(
+                              selected.id,
+                              selected.key,
+                              selected.title,
+                              target
+                            );
+                          }}
+                        >
+                          <span className="dd-dot" style={{ background: getStatusDotColor(target) }} />
+                          <span>{getStatusLabel(target)}</span>
+                        </button>
+                      ))
+                    )}
                   </div>
-                ))}
+                )}
               </div>
-
-              <form onSubmit={handleAddComment} className="comment-box">
-                <div
-                  className="mini-avatar"
-                  style={{ background: "#0F7A73", width: 24, height: 24, fontSize: 10 }}
-                >
-                  {currentUser.name?.charAt(0) || "U"}
-                </div>
-                <div style={{ flex: 1 }}>
-                  <textarea
-                    className="comment-input"
-                    rows={2}
-                    placeholder="Add a comment…"
-                    value={newComment}
-                    onChange={(e) => setNewComment(e.target.value)}
-                  />
-                  <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 6 }}>
-                    <button
-                      type="submit"
-                      disabled={commentLoading || !newComment.trim()}
-                      className="btn-primary"
-                      style={{ fontSize: 11.5, padding: "6px 12px" }}
-                    >
-                      {commentLoading ? "Posting…" : "Comment"}
-                    </button>
-                  </div>
-                </div>
-              </form>
             </div>
-
-            {/* DRAWER FOOTER */}
-            <div className="drawer-footer">
-              <button
-                type="button"
-                className="btn-ghost"
-                id="footerAssign"
-                onClick={() => {
-                  setDrawerAssigneeOpen(!drawerAssigneeOpen);
-                  document.getElementById("assigneeDD")?.scrollIntoView({ behavior: "smooth", block: "nearest" });
-                }}
-              >
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <circle cx="12" cy="8" r="4" />
-                  <path d="M4 21v-1a7 7 0 0 1 14 0v1" />
-                </svg>
-                Assign
-              </button>
-
-              <button
-                type="button"
-                className="btn-primary"
-                id="footerStatus"
-                onClick={() => setDrawerStatusOpen(true)}
-              >
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                  <path d="M20 6L9 17l-5-5" />
-                </svg>
-                Change status
-              </button>
-            </div>
-          </>
-        )}
-      </div>
+          </div>
+        </div>,
+        document.body
+      )}
 
       {/* CREATE NEW ISSUE MODAL */}
       {mounted && isNewOpen && createPortal(
@@ -2343,22 +2859,37 @@ export function IssueWorkspace({
 
               {/* Optional Screenshot / Proof Attachment */}
               <div>
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 4 }}>
-                  <label style={{ fontSize: 11, fontWeight: 700, color: "var(--text-dim)", textTransform: "uppercase" }}>
-                    Screenshot / Image Proof <span style={{ fontWeight: 400, opacity: 0.7 }}>(Optional)</span>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
+                  <label style={{ fontSize: 11, fontWeight: 700, color: "var(--text-dim)", textTransform: "uppercase", display: "flex", alignItems: "center", gap: 6 }}>
+                    <span>Screenshots / Photo Proof</span>
+                    <span style={{ fontWeight: 400, opacity: 0.7 }}>(Optional)</span>
+                    {newImages.length > 0 && (
+                      <span
+                        style={{
+                          background: "var(--accent-dim, rgba(59, 130, 246, 0.15))",
+                          color: "var(--accent)",
+                          padding: "1px 6px",
+                          borderRadius: 999,
+                          fontSize: 10,
+                          fontWeight: 700,
+                        }}
+                      >
+                        {newImages.length}/10 photos
+                      </span>
+                    )}
                   </label>
-                  {newImage && (
+                  {newImages.length > 0 && (
                     <button
                       type="button"
-                      onClick={() => setNewImage(null)}
+                      onClick={() => setNewImages([])}
                       style={{ background: "none", border: "none", color: "var(--crit)", fontSize: 11, cursor: "pointer", fontWeight: 600 }}
                     >
-                      Remove image
+                      Clear all photos
                     </button>
                   )}
                 </div>
 
-                {!newImage ? (
+                {newImages.length === 0 ? (
                   <label
                     style={{
                       display: "flex",
@@ -2366,7 +2897,7 @@ export function IssueWorkspace({
                       alignItems: "center",
                       justifyContent: "center",
                       gap: 6,
-                      padding: "16px 14px",
+                      padding: "18px 14px",
                       border: "1.5px dashed var(--border)",
                       borderRadius: 8,
                       background: "var(--surface-2)",
@@ -2384,10 +2915,13 @@ export function IssueWorkspace({
                     <input
                       type="file"
                       accept="image/*"
+                      multiple
                       style={{ display: "none" }}
                       onChange={(e) => {
-                        const file = e.target.files?.[0];
-                        if (file) handleImageUpload(file);
+                        if (e.target.files && e.target.files.length > 0) {
+                          handleBatchImageUpload(e.target.files);
+                          e.target.value = "";
+                        }
                       }}
                     />
                     <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12.5, fontWeight: 600, color: "var(--text)" }}>
@@ -2396,62 +2930,141 @@ export function IssueWorkspace({
                         <circle cx="8.5" cy="8.5" r="1.5" />
                         <polyline points="21 15 16 10 5 21" />
                       </svg>
-                      <span>Upload Bug Screenshot</span>
+                      <span>Upload Photos (Single or Multiple)</span>
                     </div>
                     <div style={{ fontSize: 11, color: "var(--text-faint)" }}>
-                      PNG, JPG, WebP up to 8MB · Click to browse
+                      PNG, JPG, WebP up to 8MB each · Select multiple photos or drag & drop
                     </div>
                   </label>
                 ) : (
-                  <div
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: 12,
-                      padding: 8,
-                      background: "var(--surface-2)",
-                      border: "1px solid var(--border)",
-                      borderRadius: 8,
-                    }}
-                  >
-                    <img
-                      src={newImage.fileUrl}
-                      alt={newImage.filename}
+                  <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                    <div
                       style={{
-                        width: 52,
-                        height: 52,
-                        objectFit: "cover",
-                        borderRadius: 6,
-                        border: "1px solid var(--border)",
+                        display: "grid",
+                        gridTemplateColumns: "repeat(auto-fill, minmax(180px, 1fr))",
+                        gap: 8,
+                        maxHeight: 210,
+                        overflowY: "auto",
+                        paddingRight: 4,
                       }}
-                    />
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontSize: 12.5, fontWeight: 600, color: "var(--text)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                        {newImage.filename}
-                      </div>
-                      <div style={{ fontSize: 11, color: "var(--text-faint)", marginTop: 2 }}>
-                        {(newImage.size / 1024).toFixed(1)} KB · Ready to attach
-                      </div>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => setNewImage(null)}
-                      style={{
-                        background: "none",
-                        border: "none",
-                        color: "var(--text-dim)",
-                        cursor: "pointer",
-                        padding: 6,
-                        display: "flex",
-                        alignItems: "center",
-                      }}
-                      title="Remove image"
                     >
-                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                        <line x1="18" y1="6" x2="6" y2="18" />
-                        <line x1="6" y1="6" x2="18" y2="18" />
-                      </svg>
-                    </button>
+                      {newImages.map((img) => (
+                        <div
+                          key={img.id}
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: 10,
+                            padding: "6px 8px",
+                            background: "var(--surface-2)",
+                            border: "1px solid var(--border)",
+                            borderRadius: 8,
+                            position: "relative",
+                          }}
+                        >
+                          <img
+                            src={img.fileUrl}
+                            alt={img.filename}
+                            style={{
+                              width: 44,
+                              height: 44,
+                              objectFit: "cover",
+                              borderRadius: 6,
+                              border: "1px solid var(--border)",
+                              flexShrink: 0,
+                            }}
+                          />
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div
+                              style={{
+                                fontSize: 11.5,
+                                fontWeight: 600,
+                                color: "var(--text)",
+                                overflow: "hidden",
+                                textOverflow: "ellipsis",
+                                whiteSpace: "nowrap",
+                              }}
+                              title={img.filename}
+                            >
+                              {img.filename}
+                            </div>
+                            <div style={{ fontSize: 10.5, color: "var(--text-faint)", marginTop: 2 }}>
+                              {(img.size / 1024).toFixed(1)} KB
+                            </div>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => removeNewImage(img.id)}
+                            style={{
+                              background: "none",
+                              border: "none",
+                              color: "var(--text-dim)",
+                              cursor: "pointer",
+                              padding: 4,
+                              display: "flex",
+                              alignItems: "center",
+                              borderRadius: 4,
+                            }}
+                            title="Remove photo"
+                            onMouseEnter={(e) => {
+                              e.currentTarget.style.color = "var(--crit)";
+                            }}
+                            onMouseLeave={(e) => {
+                              e.currentTarget.style.color = "var(--text-dim)";
+                            }}
+                          >
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                              <line x1="18" y1="6" x2="6" y2="18" />
+                              <line x1="6" y1="6" x2="18" y2="18" />
+                            </svg>
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+
+                    {newImages.length < 10 && (
+                      <label
+                        style={{
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: 6,
+                          fontSize: 11.5,
+                          fontWeight: 600,
+                          color: "var(--accent)",
+                          cursor: "pointer",
+                          padding: "6px 10px",
+                          borderRadius: 6,
+                          border: "1px dashed var(--border)",
+                          background: "var(--surface)",
+                          width: "fit-content",
+                        }}
+                      >
+                        <input
+                          type="file"
+                          accept="image/*"
+                          multiple
+                          style={{ display: "none" }}
+                          onChange={(e) => {
+                            if (e.target.files && e.target.files.length > 0) {
+                              handleBatchImageUpload(e.target.files);
+                              e.target.value = "";
+                            }
+                          }}
+                        />
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                          <line x1="12" y1="5" x2="12" y2="19" />
+                          <line x1="5" y1="12" x2="19" y2="12" />
+                        </svg>
+                        <span>Add more photos...</span>
+                      </label>
+                    )}
+                  </div>
+                )}
+
+                {isCompressing && (
+                  <div style={{ fontSize: 11, color: "var(--accent)", marginTop: 6, display: "flex", alignItems: "center", gap: 6 }}>
+                    <div className="spinner-small" style={{ width: 12, height: 12, borderWidth: 2 }} />
+                    <span>Compressing & optimizing photos...</span>
                   </div>
                 )}
               </div>
@@ -2672,75 +3285,166 @@ export function IssueWorkspace({
 
       {/* FULLSCREEN IMAGE LIGHTBOX MODAL */}
       {mounted && previewImage && createPortal(
-        <div
-          style={{
-            position: "fixed",
-            inset: 0,
-            zIndex: 99999,
-            backgroundColor: "rgba(0, 0, 0, 0.85)",
-            backdropFilter: "blur(8px)",
-            display: "flex",
-            flexDirection: "column",
-            alignItems: "center",
-            justifyContent: "center",
-            padding: 24,
-          }}
-          onClick={() => setPreviewImage(null)}
-        >
-          <div
-            style={{
-              position: "relative",
-              maxWidth: "92vw",
-              maxHeight: "88vh",
-              display: "flex",
-              flexDirection: "column",
-              alignItems: "center",
-            }}
-            onClick={(e) => e.stopPropagation()}
-          >
+        (() => {
+          const currentIndex = attachments.findIndex((a) => a.fileUrl === previewImage.url);
+          const hasMultiple = attachments.length > 1 && currentIndex !== -1;
+
+          function handlePrev(e: React.MouseEvent) {
+            e.stopPropagation();
+            if (!hasMultiple) return;
+            const prevIndex = (currentIndex - 1 + attachments.length) % attachments.length;
+            setPreviewImage({ url: attachments[prevIndex].fileUrl, filename: attachments[prevIndex].filename });
+          }
+
+          function handleNext(e: React.MouseEvent) {
+            e.stopPropagation();
+            if (!hasMultiple) return;
+            const nextIndex = (currentIndex + 1) % attachments.length;
+            setPreviewImage({ url: attachments[nextIndex].fileUrl, filename: attachments[nextIndex].filename });
+          }
+
+          return (
             <div
               style={{
+                position: "fixed",
+                inset: 0,
+                zIndex: 99999,
+                backgroundColor: "rgba(0, 0, 0, 0.88)",
+                backdropFilter: "blur(8px)",
                 display: "flex",
+                flexDirection: "column",
                 alignItems: "center",
-                justifyContent: "space-between",
-                width: "100%",
-                color: "#FFFFFF",
-                marginBottom: 10,
-                fontSize: 13,
-                fontWeight: 600,
+                justifyContent: "center",
+                padding: 24,
               }}
+              onClick={() => setPreviewImage(null)}
             >
-              <span>{previewImage.filename}</span>
-              <button
-                type="button"
-                onClick={() => setPreviewImage(null)}
+              <div
                 style={{
-                  background: "rgba(255, 255, 255, 0.2)",
-                  border: "none",
-                  color: "#FFFFFF",
-                  borderRadius: 6,
-                  padding: "5px 12px",
-                  cursor: "pointer",
-                  fontSize: 12,
-                  fontWeight: 600,
+                  position: "relative",
+                  maxWidth: "92vw",
+                  maxHeight: "88vh",
+                  display: "flex",
+                  flexDirection: "column",
+                  alignItems: "center",
                 }}
+                onClick={(e) => e.stopPropagation()}
               >
-                Close ✕
-              </button>
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    width: "100%",
+                    color: "#FFFFFF",
+                    marginBottom: 10,
+                    fontSize: 13,
+                    fontWeight: 600,
+                    gap: 12,
+                  }}
+                >
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
+                    <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      {previewImage.filename}
+                    </span>
+                    {hasMultiple && (
+                      <span style={{ fontSize: 11, color: "rgba(255, 255, 255, 0.6)", flexShrink: 0 }}>
+                        ({currentIndex + 1} of {attachments.length})
+                      </span>
+                    )}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setPreviewImage(null)}
+                    style={{
+                      background: "rgba(255, 255, 255, 0.2)",
+                      border: "none",
+                      color: "#FFFFFF",
+                      borderRadius: 6,
+                      padding: "5px 12px",
+                      cursor: "pointer",
+                      fontSize: 12,
+                      fontWeight: 600,
+                      flexShrink: 0,
+                    }}
+                  >
+                    Close ✕
+                  </button>
+                </div>
+
+                <div style={{ position: "relative", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                  {hasMultiple && (
+                    <button
+                      type="button"
+                      onClick={handlePrev}
+                      style={{
+                        position: "absolute",
+                        left: -20,
+                        transform: "translateX(-100%)",
+                        background: "rgba(255, 255, 255, 0.2)",
+                        border: "none",
+                        color: "#FFFFFF",
+                        borderRadius: "50%",
+                        width: 40,
+                        height: 40,
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        cursor: "pointer",
+                        fontSize: 20,
+                        zIndex: 10,
+                        backdropFilter: "blur(4px)",
+                      }}
+                      title="Previous photo"
+                    >
+                      ‹
+                    </button>
+                  )}
+
+                  <img
+                    src={previewImage.url}
+                    alt={previewImage.filename}
+                    style={{
+                      maxWidth: "100%",
+                      maxHeight: "80vh",
+                      objectFit: "contain",
+                      borderRadius: 8,
+                      boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.6)",
+                    }}
+                  />
+
+                  {hasMultiple && (
+                    <button
+                      type="button"
+                      onClick={handleNext}
+                      style={{
+                        position: "absolute",
+                        right: -20,
+                        transform: "translateX(100%)",
+                        background: "rgba(255, 255, 255, 0.2)",
+                        border: "none",
+                        color: "#FFFFFF",
+                        borderRadius: "50%",
+                        width: 40,
+                        height: 40,
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        cursor: "pointer",
+                        fontSize: 20,
+                        zIndex: 10,
+                        backdropFilter: "blur(4px)",
+                      }}
+                      title="Next photo"
+                    >
+                      ›
+                    </button>
+                  )}
+                </div>
+              </div>
             </div>
-            <img
-              src={previewImage.url}
-              alt={previewImage.filename}
-              style={{
-                maxWidth: "100%",
-                maxHeight: "82vh",
-                objectFit: "contain",
-                borderRadius: 8,
-                boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.6)",
-              }}
-            />
-          </div>
-        </div>,
+          );
+        })(),
         document.body
       )}
 
