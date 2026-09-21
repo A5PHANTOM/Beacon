@@ -214,7 +214,17 @@ export const allowedTransitions: Record<IssueStatus, readonly IssueStatus[]> = {
   ],
 };
 
-export function canTransition(from: IssueStatus, to: IssueStatus): boolean {
+export function canTransition(from: IssueStatus | string, to: IssueStatus | string): boolean {
   if (from === to) return false;
-  return allowedTransitions[from]?.includes(to) ?? false;
+  const standardAllowed = (allowedTransitions as Record<string, readonly string[]>)[from];
+  if (standardAllowed) {
+    if (standardAllowed.includes(to)) return true;
+    // If target is a custom status, allow transition from active states
+    if (!(to in allowedTransitions)) {
+      return from !== "CLOSED" && from !== "INVALID";
+    }
+    return false;
+  }
+  // If source is a custom status, allow transition to other statuses
+  return true;
 }

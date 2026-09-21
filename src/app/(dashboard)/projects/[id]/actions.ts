@@ -320,7 +320,7 @@ export async function deleteIssueAttachmentFromProjectAction(
 
 export async function updateIssueStatusAction(
   issueId: string,
-  newStatus: IssueStatus,
+  newStatus: IssueStatus | string,
   notes?: string
 ) {
   try {
@@ -351,9 +351,9 @@ export async function updateIssueStatusAction(
     }
 
     // Role-specific workflow guards:
-    // DEVELOPER and QA (Tester) can transition between pipeline statuses
+    // DEVELOPER and QA (Tester) can transition between pipeline statuses or custom statuses
     if (!isAdmin && (userRoleInProject === "DEVELOPER" || userRoleInProject === "QA")) {
-      const allowedPipelineStatuses: IssueStatus[] = [
+      const allowedPipelineStatuses: string[] = [
         "OPEN",
         "READY_FOR_DEV",
         "DEV_IN_PROGRESS",
@@ -370,7 +370,10 @@ export async function updateIssueStatusAction(
         "FIXED",
         "REJECTED",
       ];
-      if (!allowedPipelineStatuses.includes(newStatus)) {
+      const isCustom = await prisma.customStatus.findUnique({
+        where: { key: newStatus },
+      });
+      if (!allowedPipelineStatuses.includes(newStatus) && !isCustom) {
         return {
           success: false,
           error: "Permission denied: Invalid status transition target.",

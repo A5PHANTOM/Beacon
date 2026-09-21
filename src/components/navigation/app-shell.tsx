@@ -260,6 +260,17 @@ export function AppShell({
                 <span className="nav-label">Team & Users</span>
               </Link>
               <Link
+                href="/admin/statuses"
+                className={`nav-item ${pathname.startsWith("/admin/statuses") ? "active" : ""}`}
+                title="Workflow & Statuses"
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M4 6h16M4 12h16M4 18h7" />
+                  <circle cx="18" cy="18" r="3" />
+                </svg>
+                <span className="nav-label">Statuses</span>
+              </Link>
+              <Link
                 href="/admin/usage"
                 className={`nav-item ${pathname.startsWith("/admin/usage") ? "active" : ""}`}
                 title="Storage & Resource Usage"
@@ -313,6 +324,13 @@ export function AppShell({
                     Manage Users & Accounts
                   </Link>
                   <Link
+                    href="/admin/statuses"
+                    onClick={() => setUserMenuOpen(false)}
+                    className="flex items-center gap-2 rounded-lg px-3 py-1.5 text-xs text-[var(--text)] hover:bg-[var(--surface-hover)] transition"
+                  >
+                    Workflow & Statuses
+                  </Link>
+                  <Link
                     href="/admin/usage"
                     onClick={() => setUserMenuOpen(false)}
                     className="flex items-center gap-2 rounded-lg px-3 py-1.5 text-xs text-[var(--text)] hover:bg-[var(--surface-hover)] transition"
@@ -341,6 +359,8 @@ export function AppShell({
           <div className="crumb">
             {pathname === "/projects" ? (
               <><b>Workspace</b> / Projects</>
+            ) : pathname.startsWith("/admin/statuses") ? (
+              <><b>Admin Console</b> / Workflow & Statuses</>
             ) : pathname.startsWith("/admin/usage") ? (
               <><b>Admin Console</b> / Storage Usage</>
             ) : pathname.startsWith("/admin") ? (

@@ -26,7 +26,7 @@ export type WorkspaceIssue = {
   expected: string | null;
   actual: string | null;
   environment: string | null;
-  status: IssueStatus;
+  status: IssueStatus | string;
   severity: "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
   priority: "LOW" | "MEDIUM" | "HIGH" | "URGENT";
   assigneeId: string | null;
@@ -141,6 +141,7 @@ export function IssueWorkspace({
   project,
   initialIssues,
   members,
+  customStatuses = [],
   currentUser,
 }: {
   project: {
@@ -152,6 +153,14 @@ export function IssueWorkspace({
   };
   initialIssues: WorkspaceIssue[];
   members: ProjectMemberItem[];
+  customStatuses?: Array<{
+    id: string;
+    key: string;
+    label: string;
+    color: string;
+    category: string;
+    description: string | null;
+  }>;
   currentUser: {
     id: string;
     name: string;
@@ -196,7 +205,7 @@ export function IssueWorkspace({
     issueId: string;
     issueKey: string;
     issueTitle: string;
-    targetStatus: IssueStatus;
+    targetStatus: IssueStatus | string;
   } | null>(null);
   const [statusNoteText, setStatusNoteText] = useState("");
 
@@ -335,7 +344,7 @@ export function IssueWorkspace({
   // Helper to compute allowed transitions for any issue based on user role
   function getTransitionsForIssue(issue: WorkspaceIssue) {
     // Pipeline statuses from workflow
-    const allPipelineStatuses: IssueStatus[] = [
+    const allPipelineStatuses: string[] = [
       "OPEN",
       "READY_FOR_DEV",
       "DEV_IN_PROGRESS",
@@ -350,7 +359,10 @@ export function IssueWorkspace({
       "INVALID",
     ];
 
-    return allPipelineStatuses.filter((target) => {
+    const customKeys = customStatuses.map((cs) => cs.key);
+    const combinedStatuses = [...allPipelineStatuses, ...customKeys];
+
+    return combinedStatuses.filter((target) => {
       if (target === issue.status) return false;
       if (issue.status === "REPORTED" && target === "OPEN") return false;
       if (issue.status === "IN_PROGRESS" && target === "DEV_IN_PROGRESS") return false;
@@ -362,6 +374,9 @@ export function IssueWorkspace({
 
   // Status display label helper
   function getStatusLabel(status: string) {
+    const custom = customStatuses.find((cs) => cs.key === status);
+    if (custom) return custom.label;
+
     switch (status) {
       case "OPEN":
       case "REPORTED":
@@ -408,6 +423,9 @@ export function IssueWorkspace({
 
   // Helper for status dot color
   function getStatusDotColor(status: IssueStatus | string) {
+    const custom = customStatuses.find((cs) => cs.key === status);
+    if (custom) return custom.color;
+
     switch (status) {
       case "OPEN":
       case "REPORTED":
@@ -842,7 +860,7 @@ export function IssueWorkspace({
     issueId: string,
     issueKey: string,
     issueTitle: string,
-    targetStatus: IssueStatus
+    targetStatus: IssueStatus | string
   ) {
     setStatusNoteText("");
     setStatusNoteModal({ issueId, issueKey, issueTitle, targetStatus });
@@ -850,7 +868,7 @@ export function IssueWorkspace({
 
   async function handleTransition(
     issueId: string,
-    nextStatus: IssueStatus,
+    nextStatus: IssueStatus | string,
     notes?: string
   ) {
     setTransitionLoading(true);
@@ -1344,18 +1362,29 @@ export function IssueWorkspace({
             onChange={(e) => setFilterStatus(e.target.value)}
           >
             <option value="ALL">All Status ({totalIssuesCount})</option>
-            <option value="OPEN">Open</option>
-            <option value="READY_FOR_DEV">Ready for Dev</option>
-            <option value="DEV_IN_PROGRESS">Dev In Progress</option>
-            <option value="DEV_REVIEW">Dev Review</option>
-            <option value="DEV_COMPLETED">Dev Completed</option>
-            <option value="DEV_DEPLOYED">Dev Deployed</option>
-            <option value="QA_IN_PROGRESS">QA In Progress</option>
-            <option value="QA_DEPLOYED">QA Deployed</option>
-            <option value="READY_FOR_RELEASE">Ready for Release</option>
-            <option value="PROD_DEPLOYED">Prod Deployed</option>
-            <option value="CLOSED">Closed</option>
-            <option value="INVALID">Invalid</option>
+            <optgroup label="Standard Statuses">
+              <option value="OPEN">Open</option>
+              <option value="READY_FOR_DEV">Ready for Dev</option>
+              <option value="DEV_IN_PROGRESS">Dev In Progress</option>
+              <option value="DEV_REVIEW">Dev Review</option>
+              <option value="DEV_COMPLETED">Dev Completed</option>
+              <option value="DEV_DEPLOYED">Dev Deployed</option>
+              <option value="QA_IN_PROGRESS">QA In Progress</option>
+              <option value="QA_DEPLOYED">QA Deployed</option>
+              <option value="READY_FOR_RELEASE">Ready for Release</option>
+              <option value="PROD_DEPLOYED">Prod Deployed</option>
+              <option value="CLOSED">Closed</option>
+              <option value="INVALID">Invalid</option>
+            </optgroup>
+            {customStatuses.length > 0 && (
+              <optgroup label="Custom Statuses">
+                {customStatuses.map((cs) => (
+                  <option key={cs.id} value={cs.key}>
+                    {cs.label}
+                  </option>
+                ))}
+              </optgroup>
+            )}
           </select>
           <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
             <path d="M6 9l6 6 6-6" />
@@ -1424,6 +1453,30 @@ export function IssueWorkspace({
           >
             {raisedByMeOnly ? "✓ Already Raised by Me" : "Already Raised by Me"}
           </button>
+        )}
+
+        {/* Admin Manage Statuses shortcut */}
+        {currentUser.role === "ADMIN" && (
+          <a
+            href="/admin/statuses"
+            className="filter-chip"
+            style={{
+              textDecoration: "none",
+              background: "rgba(99, 102, 241, 0.08)",
+              borderColor: "rgba(99, 102, 241, 0.3)",
+              color: "#818cf8",
+              fontWeight: 600,
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 5,
+            }}
+            title="Configure custom workflow statuses"
+          >
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+              <path d="M12 20h9M16.5 3.5a2.121 2.121 0 013 3L7 19l-4 1 1-4L16.5 3.5z" />
+            </svg>
+            Manage Statuses
+          </a>
         )}
 
         {/* New Issue Button */}

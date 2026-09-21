@@ -99,6 +99,23 @@ export default async function ProjectIssuesPage({ params }: Props) {
     roleInProject: m.roleInProject,
   }));
 
+  // Fetch custom statuses applicable to this project
+  const rawCustomStatuses = await prisma.customStatus.findMany({
+    where: {
+      OR: [{ projectId: null }, { projectId: project.id }],
+    },
+    orderBy: [{ order: "asc" }, { createdAt: "asc" }],
+  });
+
+  const customStatuses = rawCustomStatuses.map((s) => ({
+    id: s.id,
+    key: s.key,
+    label: s.label,
+    color: s.color,
+    category: s.category,
+    description: s.description,
+  }));
+
   return (
     <IssueWorkspace
       project={{
@@ -110,6 +127,7 @@ export default async function ProjectIssuesPage({ params }: Props) {
       }}
       initialIssues={issues}
       members={members}
+      customStatuses={customStatuses}
       currentUser={{
         id: session.user.id,
         name: session.user.name || "User",

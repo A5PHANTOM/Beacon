@@ -131,3 +131,16 @@ model Notification {
   createdAt DateTime  @default(now())
   user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
+
+model CustomStatus {
+  id          String   @id @default(cuid())
+  key         String   @unique
+  label       String
+  color       String   @default("#6366F1")
+  category    String   @default("IN_PROGRESS") // TODO | IN_PROGRESS | DONE | INVALID
+  description String?
+  projectId   String?
+  order       Int      @default(0)
+  createdAt   DateTime @default(now())
+}
+
