@@ -282,6 +282,19 @@ export function AppShell({
                 </svg>
                 <span className="nav-label">Usage</span>
               </Link>
+              <Link
+                href="/admin/analytics"
+                className={`nav-item ${pathname.startsWith("/admin/analytics") ? "active" : ""}`}
+                title="System & Project Analytics"
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M3 3v18h18" />
+                  <path d="M18 17V9" />
+                  <path d="M13 17V5" />
+                  <path d="M8 17v-3" />
+                </svg>
+                <span className="nav-label">Analytics</span>
+              </Link>
             </>
           )}
         </div>
@@ -337,6 +350,13 @@ export function AppShell({
                   >
                     Storage Usage & Cleanup
                   </Link>
+                  <Link
+                    href="/admin/analytics"
+                    onClick={() => setUserMenuOpen(false)}
+                    className="flex items-center gap-2 rounded-lg px-3 py-1.5 text-xs text-[var(--text)] hover:bg-[var(--surface-hover)] transition"
+                  >
+                    System & Project Analytics
+                  </Link>
                 </>
               )}
 
@@ -359,6 +379,8 @@ export function AppShell({
           <div className="crumb">
             {pathname === "/projects" ? (
               <><b>Workspace</b> / Projects</>
+            ) : pathname.startsWith("/admin/analytics") ? (
+              <><b>Admin Console</b> / Analytics & Reports</>
             ) : pathname.startsWith("/admin/statuses") ? (
               <><b>Admin Console</b> / Workflow & Statuses</>
             ) : pathname.startsWith("/admin/usage") ? (
@@ -489,19 +511,36 @@ export function AppShell({
             </div>
 
             {isAdmin && (
-              <div
-                className="cmdk-item"
-                onClick={() => {
-                  setCmdkOpen(false);
-                  router.push("/admin/users");
-                }}
-              >
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2" />
-                  <circle cx="9" cy="7" r="4" />
-                </svg>
-                Manage Team & Users
-              </div>
+              <>
+                <div
+                  className="cmdk-item"
+                  onClick={() => {
+                    setCmdkOpen(false);
+                    router.push("/admin/analytics");
+                  }}
+                >
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M3 3v18h18" />
+                    <path d="M18 17V9" />
+                    <path d="M13 17V5" />
+                    <path d="M8 17v-3" />
+                  </svg>
+                  System & Project Analytics
+                </div>
+                <div
+                  className="cmdk-item"
+                  onClick={() => {
+                    setCmdkOpen(false);
+                    router.push("/admin/users");
+                  }}
+                >
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2" />
+                    <circle cx="9" cy="7" r="4" />
+                  </svg>
+                  Manage Team & Users
+                </div>
+              </>
             )}
 
             <div className="cmdk-sec">Switch Project</div>

@@ -7,6 +7,7 @@ import {
   FolderKanban,
   Users,
   HardDrive,
+  BarChart3,
   LogOut,
   ChevronDown,
   Layers,
@@ -148,6 +149,17 @@ export function Navbar({
                   <HardDrive className="h-4 w-4" />
                   Usage
                 </Link>
+                <Link
+                  href="/admin/analytics"
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition ${
+                    pathname.startsWith("/admin/analytics")
+                      ? "bg-indigo-50 text-indigo-700 font-semibold"
+                      : "text-slate-600 hover:text-slate-900 hover:bg-slate-50"
+                  }`}
+                >
+                  <BarChart3 className="h-4 w-4" />
+                  Analytics
+                </Link>
               </>
             )}
           </nav>
@@ -205,6 +217,14 @@ export function Navbar({
                       >
                         <HardDrive className="h-3.5 w-3.5 text-slate-500" />
                         Usage & Storage Center
+                      </Link>
+                      <Link
+                        href="/admin/analytics"
+                        onClick={() => setUserMenuOpen(false)}
+                        className="flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50 transition"
+                      >
+                        <BarChart3 className="h-3.5 w-3.5 text-slate-500" />
+                        Analytics & Reports
                       </Link>
                     </>
                   )}
