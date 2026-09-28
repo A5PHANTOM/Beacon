@@ -41,13 +41,9 @@ export default async function ProjectsPage() {
         },
       },
       issues: {
-        where: {
-          status: {
-            notIn: ["FIXED", "VERIFIED", "CLOSED"],
-          },
-        },
         select: {
           id: true,
+          status: true,
         },
       },
     },
@@ -64,26 +60,49 @@ export default async function ProjectsPage() {
     orderBy: { name: "asc" },
   });
 
-  const projects = rawProjects.map((p) => ({
-    id: p.id,
-    name: p.name,
-    key: p.key,
-    description: p.description,
-    createdById: p.createdById,
-    createdAt: p.createdAt.toISOString(),
-    _count: {
-      issues: p._count.issues,
-      members: p._count.members,
-    },
-    openIssuesCount: p.issues.length,
-    members: p.members.map((m) => ({
-      userId: m.userId,
-      userName: m.user.name,
-      userEmail: m.user.email,
-      userRole: m.user.role,
-      roleInProject: m.roleInProject,
-    })),
-  }));
+  const projects = rawProjects.map((p) => {
+    const devCompletedCount = p.issues.filter(
+      (i) => i.status === "DEV_COMPLETED" || i.status === "FIXED"
+    ).length;
+
+    const devDeployedCount = p.issues.filter(
+      (i) =>
+        i.status === "DEV_DEPLOYED" ||
+        i.status === "QA_DEPLOYED" ||
+        i.status === "READY_FOR_RELEASE" ||
+        i.status === "PROD_DEPLOYED" ||
+        i.status === "VERIFIED" ||
+        i.status === "CLOSED"
+    ).length;
+
+    const openIssuesCount = Math.max(
+      0,
+      p._count.issues - (devCompletedCount + devDeployedCount)
+    );
+
+    return {
+      id: p.id,
+      name: p.name,
+      key: p.key,
+      description: p.description,
+      createdById: p.createdById,
+      createdAt: p.createdAt.toISOString(),
+      _count: {
+        issues: p._count.issues,
+        members: p._count.members,
+      },
+      openIssuesCount,
+      devCompletedCount,
+      devDeployedCount,
+      members: p.members.map((m) => ({
+        userId: m.userId,
+        userName: m.user.name,
+        userEmail: m.user.email,
+        userRole: m.user.role,
+        roleInProject: m.roleInProject,
+      })),
+    };
+  });
 
   return (
     <ProjectsClient

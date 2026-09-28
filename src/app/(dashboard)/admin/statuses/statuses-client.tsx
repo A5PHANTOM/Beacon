@@ -2,6 +2,7 @@
 
 import React, { useState } from "react";
 import Link from "next/link";
+import { Users, HardDrive, BarChart3, Layers } from "lucide-react";
 import {
   createCustomStatusAction,
   deleteCustomStatusAction,
@@ -215,15 +216,97 @@ export function StatusesClient({
         </div>
       )}
 
-      {/* Breadcrumb & Navigation */}
-      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16, fontSize: 13, color: "var(--text-faint)" }}>
-        <Link href="/projects" style={{ color: "var(--text-dim)", textDecoration: "none" }}>
-          Workspace
+      {/* Admin Navbar Tabs */}
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 8,
+          borderBottom: "1px solid var(--border)",
+          marginBottom: 24,
+          paddingBottom: 10,
+          flexWrap: "wrap",
+        }}
+      >
+        <Link
+          href="/admin/users"
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 7,
+            padding: "7px 15px",
+            borderRadius: 8,
+            fontSize: 13,
+            fontWeight: 600,
+            textDecoration: "none",
+            background: "transparent",
+            color: "var(--text-dim)",
+            border: "1px solid transparent",
+            transition: "all 0.15s ease",
+          }}
+        >
+          <Users className="h-4 w-4" />
+          <span>Team & Users</span>
         </Link>
-        <span>/</span>
-        <span style={{ color: "var(--text)", fontWeight: 600 }}>Admin Console</span>
-        <span>/</span>
-        <span style={{ color: "var(--accent)", fontWeight: 600 }}>Workflow & Statuses</span>
+        <Link
+          href="/admin/statuses"
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 7,
+            padding: "7px 15px",
+            borderRadius: 8,
+            fontSize: 13,
+            fontWeight: 700,
+            textDecoration: "none",
+            background: "var(--accent-soft)",
+            color: "var(--accent)",
+            border: "1px solid var(--accent)",
+          }}
+        >
+          <Layers className="h-4 w-4" />
+          <span>Workflow & Statuses</span>
+        </Link>
+        <Link
+          href="/admin/usage"
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 7,
+            padding: "7px 15px",
+            borderRadius: 8,
+            fontSize: 13,
+            fontWeight: 600,
+            textDecoration: "none",
+            background: "transparent",
+            color: "var(--text-dim)",
+            border: "1px solid transparent",
+            transition: "all 0.15s ease",
+          }}
+        >
+          <HardDrive className="h-4 w-4" />
+          <span>Usage & Storage</span>
+        </Link>
+        <Link
+          href="/admin/analytics"
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 7,
+            padding: "7px 15px",
+            borderRadius: 8,
+            fontSize: 13,
+            fontWeight: 600,
+            textDecoration: "none",
+            background: "transparent",
+            color: "var(--text-dim)",
+            border: "1px solid transparent",
+            transition: "all 0.15s ease",
+          }}
+        >
+          <BarChart3 className="h-4 w-4" />
+          <span>Analytics & Reports</span>
+        </Link>
       </div>
 
       {/* Main Header */}

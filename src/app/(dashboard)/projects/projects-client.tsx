@@ -37,6 +37,8 @@ type ProjectData = {
     members: number;
   };
   openIssuesCount: number;
+  devCompletedCount?: number;
+  devDeployedCount?: number;
   members: {
     userId: string;
     userName: string;
@@ -244,8 +246,19 @@ export function ProjectsClient({
           const lead = project.members.find((m) => m.roleInProject === "LEAD");
           const developers = project.members.filter((m) => m.roleInProject === "DEVELOPER");
           const testers = project.members.filter((m) => m.roleInProject === "QA");
-          const solvedCount = project._count.issues - project.openIssuesCount;
-          const solveRate = project._count.issues > 0 ? Math.round((solvedCount / project._count.issues) * 100) : 0;
+          const devCompletedCount = project.devCompletedCount ?? 0;
+          const devDeployedCount = project.devDeployedCount ?? 0;
+          const activeOpenCount =
+            project.openIssuesCount ??
+            Math.max(0, project._count.issues - (devCompletedCount + devDeployedCount));
+          const devCompletedRate =
+            project._count.issues > 0
+              ? Math.round((devCompletedCount / project._count.issues) * 100)
+              : 0;
+          const devDeployedRate =
+            project._count.issues > 0
+              ? Math.round((devDeployedCount / project._count.issues) * 100)
+              : 0;
 
           return (
             <div
@@ -411,33 +424,53 @@ export function ProjectsClient({
                     marginBottom: 16,
                   }}
                 >
-                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10, flexWrap: "wrap", gap: 4 }}>
                     <span style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", color: "var(--text-faint)", letterSpacing: "0.02em" }}>
                       Lifetime Issues (Since {new Date(project.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })})
                     </span>
-                    <span className="mono" style={{ fontSize: 11.5, fontWeight: 700, color: "var(--ok)" }}>
-                      {solveRate}% Solved
-                    </span>
+                    <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11, fontWeight: 700 }}>
+                      <span className="mono" style={{ color: "var(--info)" }}>
+                        {devCompletedRate}% Completed
+                      </span>
+                      <span style={{ color: "var(--text-faint)" }}>•</span>
+                      <span className="mono" style={{ color: "var(--ok)" }}>
+                        {devDeployedRate}% Deployed
+                      </span>
+                    </div>
                   </div>
 
-                  <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8, textAlign: "center" }}>
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 6, marginBottom: 10, textAlign: "center" }}>
                     <div>
-                      <span className="mono" style={{ fontSize: 14, fontWeight: 700, color: "var(--text)" }}>
+                      <span className="mono" style={{ fontSize: 13.5, fontWeight: 700, color: "var(--text)" }}>
                         {project._count.issues}
                       </span>
-                      <span style={{ fontSize: 10, color: "var(--text-faint)", display: "block" }}>Total</span>
+                      <span style={{ fontSize: 9.5, color: "var(--text-faint)", display: "block", textTransform: "uppercase", marginTop: 2 }}>
+                        Total
+                      </span>
                     </div>
                     <div>
-                      <span className="mono" style={{ fontSize: 14, fontWeight: 700, color: "var(--ok)" }}>
-                        {solvedCount}
+                      <span className="mono" style={{ fontSize: 13.5, fontWeight: 700, color: "var(--info)" }}>
+                        {devCompletedCount}
                       </span>
-                      <span style={{ fontSize: 10, color: "var(--ok)", display: "block" }}>Solved</span>
+                      <span style={{ fontSize: 9.5, color: "var(--info)", display: "block", textTransform: "uppercase", marginTop: 2, fontWeight: 600 }}>
+                        Dev Completed
+                      </span>
                     </div>
                     <div>
-                      <span className="mono" style={{ fontSize: 14, fontWeight: 700, color: "var(--warn)" }}>
-                        {project.openIssuesCount}
+                      <span className="mono" style={{ fontSize: 13.5, fontWeight: 700, color: "var(--ok)" }}>
+                        {devDeployedCount}
                       </span>
-                      <span style={{ fontSize: 10, color: "var(--warn)", display: "block" }}>Active Open</span>
+                      <span style={{ fontSize: 9.5, color: "var(--ok)", display: "block", textTransform: "uppercase", marginTop: 2, fontWeight: 600 }}>
+                        Dev Deployed
+                      </span>
+                    </div>
+                    <div>
+                      <span className="mono" style={{ fontSize: 13.5, fontWeight: 700, color: "var(--warn)" }}>
+                        {activeOpenCount}
+                      </span>
+                      <span style={{ fontSize: 9.5, color: "var(--warn)", display: "block", textTransform: "uppercase", marginTop: 2, fontWeight: 600 }}>
+                        Active Open
+                      </span>
                     </div>
                   </div>
 
@@ -446,15 +479,25 @@ export function ProjectsClient({
                     {project._count.issues > 0 ? (
                       <>
                         <div
-                          className="animated-progress-fill"
+                          title={`Dev Deployed: ${devDeployedCount} (${devDeployedRate}%)`}
                           style={{
-                            width: `${(solvedCount / project._count.issues) * 100}%`,
+                            width: `${(devDeployedCount / project._count.issues) * 100}%`,
+                            background: "var(--ok)",
                             transition: "width .3s",
                           }}
                         />
                         <div
+                          title={`Dev Completed: ${devCompletedCount} (${devCompletedRate}%)`}
                           style={{
-                            width: `${(project.openIssuesCount / project._count.issues) * 100}%`,
+                            width: `${(devCompletedCount / project._count.issues) * 100}%`,
+                            background: "var(--info)",
+                            transition: "width .3s",
+                          }}
+                        />
+                        <div
+                          title={`Active Open: ${activeOpenCount}`}
+                          style={{
+                            width: `${(activeOpenCount / project._count.issues) * 100}%`,
                             background: "var(--warn)",
                             transition: "width .3s",
                           }}

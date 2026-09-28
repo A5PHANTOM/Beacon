@@ -18,12 +18,23 @@ import {
   ChevronRight,
   Sparkles,
   BarChart3,
-  Calendar,
+  HardDrive,
   ExternalLink,
+  Code2,
+  Bug,
+  Award,
+  Zap,
+  Activity,
+  CheckCircle,
+  AlertCircle,
+  HelpCircle,
+  Flame,
 } from "lucide-react";
 import type {
   SystemAnalyticsData,
   ProjectAnalyticsData,
+  DeveloperPerformance,
+  TesterPerformance,
 } from "./actions";
 import { getSystemAnalyticsAction } from "./actions";
 
@@ -69,8 +80,8 @@ export function AnalyticsClient({
     setDownloadingPdf(key);
     showToast(
       projectId
-        ? "Generating project PDF report with blue gradient template..."
-        : "Generating system executive PDF report with blue gradient template..."
+        ? "Generating project PDF audit report..."
+        : "Generating system executive PDF report..."
     );
 
     try {
@@ -78,7 +89,6 @@ export function AnalyticsClient({
         ? `/api/admin/analytics/pdf?projectId=${encodeURIComponent(projectId)}`
         : `/api/admin/analytics/pdf`;
 
-      // Trigger download via temporary link
       const link = document.createElement("a");
       link.href = url;
       link.setAttribute(
@@ -91,7 +101,7 @@ export function AnalyticsClient({
     } catch {
       showToast("Failed to initiate PDF download");
     } finally {
-      setTimeout(() => setDownloadingPdf(null), 1200);
+      setDownloadingPdf(null);
     }
   };
 
@@ -104,707 +114,2102 @@ export function AnalyticsClient({
       p.key.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
+  // Maximum issues assigned across developers for relative bar graphs
+  const maxDevAssigned = Math.max(
+    1,
+    ...data.developers.map((d) => d.assignedCount)
+  );
+
+  // Maximum issues raised across testers for relative bar graphs
+  const maxTesterRaised = Math.max(
+    1,
+    ...data.testers.map((t) => t.totalRaised)
+  );
+
+  // Total issues raised by testers across system and in the selected project
+  const totalTesterIssues = data.testers.reduce((acc, t) => acc + t.totalRaised, 0);
+  const selectedProjectTesterRaised = selectedProject
+    ? selectedProject.testers.reduce((acc, t) => acc + t.totalRaised, 0)
+    : 0;
+
   return (
-    <div className="min-h-screen pb-16 bg-slate-50 text-slate-900">
-      {/* Toast Notification */}
+    <div style={{ maxWidth: 1240, margin: "0 auto", padding: "24px 20px 80px" }}>
+      {/* Toast Alert */}
       {toastMessage && (
-        <div className="fixed bottom-6 right-6 z-50 flex items-center gap-2.5 rounded-xl border border-blue-200 bg-white px-4 py-3 shadow-xl shadow-blue-500/10 text-xs font-semibold text-slate-800 transition-all animate-in fade-in slide-in-from-bottom-2">
-          <Sparkles className="h-4 w-4 text-blue-600 animate-spin" />
+        <div
+          style={{
+            position: "fixed",
+            bottom: 24,
+            right: 24,
+            background: "var(--surface)",
+            color: "var(--text)",
+            border: "1px solid var(--border)",
+            boxShadow: "inset 0 1px 0 0 var(--border-specular), var(--shadow-lg)",
+            padding: "12px 20px",
+            borderRadius: 10,
+            fontSize: 13,
+            fontWeight: 600,
+            zIndex: 100000,
+            display: "flex",
+            alignItems: "center",
+            gap: 10,
+            animation: "fadeIn 0.2s ease-out",
+          }}
+        >
+          <div
+            style={{
+              width: 20,
+              height: 20,
+              borderRadius: "50%",
+              background: "var(--accent-soft)",
+              color: "var(--accent)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
+            <Sparkles className="h-3 w-3" />
+          </div>
           <span>{toastMessage}</span>
         </div>
       )}
 
-      {/* Top Hero Banner with Light Mode Blue Gradient */}
-      <div className="relative overflow-hidden border-b border-blue-100 bg-gradient-to-r from-blue-700 via-indigo-700 to-sky-600 px-6 py-9 text-white shadow-md">
-        {/* Subtle decorative glow shapes */}
-        <div className="absolute -top-24 -right-24 h-72 w-72 rounded-full bg-white/10 blur-3xl pointer-events-none" />
-        <div className="absolute -bottom-20 -left-20 h-64 w-64 rounded-full bg-sky-400/20 blur-2xl pointer-events-none" />
+      {/* Admin Navbar Tabs */}
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 8,
+          borderBottom: "1px solid var(--border)",
+          marginBottom: 24,
+          paddingBottom: 10,
+          overflowX: "auto",
+        }}
+      >
+        <Link
+          href="/admin/users"
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 7,
+            padding: "7px 15px",
+            borderRadius: 8,
+            fontSize: 13,
+            fontWeight: 600,
+            textDecoration: "none",
+            background: "transparent",
+            color: "var(--text-dim)",
+            border: "1px solid transparent",
+            transition: "all 0.15s ease",
+          }}
+        >
+          <Users className="h-4 w-4" />
+          <span>Team & Users</span>
+        </Link>
+        <Link
+          href="/admin/statuses"
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 7,
+            padding: "7px 15px",
+            borderRadius: 8,
+            fontSize: 13,
+            fontWeight: 600,
+            textDecoration: "none",
+            background: "transparent",
+            color: "var(--text-dim)",
+            border: "1px solid transparent",
+            transition: "all 0.15s ease",
+          }}
+        >
+          <Layers className="h-4 w-4" />
+          <span>Workflow & Statuses</span>
+        </Link>
+        <Link
+          href="/admin/usage"
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 7,
+            padding: "7px 15px",
+            borderRadius: 8,
+            fontSize: 13,
+            fontWeight: 600,
+            textDecoration: "none",
+            background: "transparent",
+            color: "var(--text-dim)",
+            border: "1px solid transparent",
+            transition: "all 0.15s ease",
+          }}
+        >
+          <HardDrive className="h-4 w-4" />
+          <span>Storage & Usage</span>
+        </Link>
+        <Link
+          href="/admin/analytics"
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 7,
+            padding: "7px 15px",
+            borderRadius: 8,
+            fontSize: 13,
+            fontWeight: 700,
+            textDecoration: "none",
+            background: "var(--accent-soft)",
+            color: "var(--accent)",
+            border: "1px solid var(--accent)",
+          }}
+        >
+          <BarChart3 className="h-4 w-4" />
+          <span>Analytics & Reports</span>
+        </Link>
+      </div>
 
-        <div className="relative mx-auto max-w-7xl">
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <div className="flex items-center gap-2.5">
-                <span className="inline-flex items-center gap-1.5 rounded-full bg-white/15 px-3 py-1 text-[11px] font-bold tracking-wider uppercase text-blue-100 backdrop-blur-md border border-white/20">
-                  <ShieldCheck className="h-3.5 w-3.5 text-blue-200" />
-                  Beacon Admin Center
-                </span>
-                <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-400/20 px-2.5 py-1 text-[11px] font-bold text-emerald-200 border border-emerald-300/30">
-                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                  Live Sync
-                </span>
-              </div>
-              <h1 className="mt-2.5 text-2xl sm:text-3xl font-extrabold tracking-tight text-white">
-                Analytics & Performance Intelligence
-              </h1>
-              <p className="mt-1 text-xs sm:text-sm text-blue-100/90 max-w-2xl">
-                Comprehensive system diagnostics, individual project velocity, issue turnaround
-                times, and branded PDF audit reports.
-              </p>
-            </div>
-
-            {/* Quick Actions */}
-            <div className="flex flex-wrap items-center gap-2.5">
-              <button
-                type="button"
-                onClick={handleRefresh}
-                disabled={isRefreshing}
-                className="flex items-center gap-2 rounded-xl border border-white/20 bg-white/10 px-3.5 py-2 text-xs font-semibold text-white backdrop-blur hover:bg-white/20 transition cursor-pointer disabled:opacity-50"
-              >
-                <RefreshCw className={`h-3.5 w-3.5 ${isRefreshing ? "animate-spin" : ""}`} />
-                <span>Refresh</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => handleDownloadPdf()}
-                disabled={downloadingPdf === "system"}
-                className="flex items-center gap-2 rounded-xl bg-white px-4 py-2 text-xs font-bold text-blue-800 shadow-lg shadow-black/10 hover:bg-blue-50 transition transform hover:-translate-y-0.5 cursor-pointer disabled:opacity-50"
-              >
-                <Download className="h-3.5 w-3.5 text-blue-700" />
-                <span>
-                  {downloadingPdf === "system" ? "Generating PDF..." : "Export System PDF"}
-                </span>
-              </button>
-            </div>
-          </div>
-
-          {/* Navigation Tabs */}
-          <div className="mt-7 flex items-center gap-2 border-t border-white/15 pt-4">
-            <button
-              type="button"
-              onClick={() => setActiveTab("system")}
-              className={`flex items-center gap-2 rounded-lg px-4 py-2 text-xs font-bold transition cursor-pointer ${
-                activeTab === "system"
-                  ? "bg-white text-blue-900 shadow-sm"
-                  : "text-blue-100 hover:bg-white/10 hover:text-white"
-              }`}
+      {/* Main Page Header */}
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          flexWrap: "wrap",
+          gap: 16,
+          marginBottom: 24,
+        }}
+      >
+        <div>
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <h1 style={{ fontSize: 24, fontWeight: 800, margin: 0, color: "var(--text)", letterSpacing: "-0.025em" }}>
+              Analytics & Performance
+            </h1>
+            <span
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 5,
+                padding: "3px 9px",
+                borderRadius: 20,
+                fontSize: 11,
+                fontWeight: 700,
+                background: "var(--ok-soft)",
+                color: "var(--ok)",
+                border: "1px solid var(--border)",
+              }}
             >
-              <BarChart3 className="h-3.5 w-3.5" />
-              <span>System Overview</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setActiveTab("project")}
-              className={`flex items-center gap-2 rounded-lg px-4 py-2 text-xs font-bold transition cursor-pointer ${
-                activeTab === "project"
-                  ? "bg-white text-blue-900 shadow-sm"
-                  : "text-blue-100 hover:bg-white/10 hover:text-white"
-              }`}
-            >
-              <FolderKanban className="h-3.5 w-3.5" />
-              <span>Project Deep-Dive</span>
-              <span className="rounded-full bg-blue-500/30 px-2 py-0.5 text-[10px] text-white">
-                {data.projects.length}
-              </span>
-            </button>
+              <span
+                style={{
+                  width: 6,
+                  height: 6,
+                  borderRadius: "50%",
+                  background: "var(--ok)",
+                }}
+              />
+              Live Sync
+            </span>
           </div>
+          <p style={{ margin: "4px 0 0", fontSize: 13.5, color: "var(--text-dim)" }}>
+            Real-time developer velocity, tester bug reporting by project, risk profiling, and exportable PDF audits.
+          </p>
+        </div>
+
+        {/* Top Actions */}
+        <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+          <button
+            type="button"
+            onClick={handleRefresh}
+            disabled={isRefreshing}
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 6,
+              padding: "8px 14px",
+              borderRadius: 8,
+              fontSize: 13,
+              fontWeight: 600,
+              background: "var(--surface)",
+              color: "var(--text)",
+              border: "1px solid var(--border)",
+              boxShadow: "inset 0 1px 0 0 var(--border-specular), var(--shadow-xs)",
+              cursor: "pointer",
+              transition: "all 0.15s ease",
+            }}
+          >
+            <RefreshCw
+              className="h-3.5 w-3.5"
+              style={{ animation: isRefreshing ? "spin 1s linear infinite" : "none" }}
+            />
+            <span>Refresh</span>
+          </button>
+
+          {/* Premium Blue-Gradient Download PDF Button */}
+          <button
+            type="button"
+            onClick={() => handleDownloadPdf()}
+            disabled={downloadingPdf === "system"}
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 8,
+              padding: "8px 16px",
+              borderRadius: 8,
+              fontSize: 13,
+              fontWeight: 700,
+              background: "linear-gradient(135deg, #1d4ed8 0%, #2563eb 50%, #38bdf8 100%)",
+              color: "#ffffff",
+              border: "none",
+              boxShadow: "0 2px 10px rgba(37, 99, 235, 0.35)",
+              cursor: "pointer",
+              transition: "all 0.15s ease",
+            }}
+          >
+            <Download className="h-4 w-4" />
+            <span>{downloadingPdf === "system" ? "Generating..." : "Download System PDF"}</span>
+          </button>
         </div>
       </div>
 
-      <div className="mx-auto max-w-7xl px-4 sm:px-6 pt-8">
-        {activeTab === "system" ? (
-          /* ========================================================== */
-          /*                     SYSTEM OVERVIEW TAB                    */
-          /* ========================================================== */
-          <div className="space-y-8 animate-in fade-in duration-300">
-            {/* 4 Main KPI Cards */}
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-              {/* Card 1: Users */}
-              <div className="group relative overflow-hidden rounded-2xl border border-blue-100 bg-white p-5 shadow-xs transition hover:shadow-md hover:border-blue-300">
-                <div className="flex items-center justify-between">
-                  <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500">
-                    Total Users
-                  </span>
-                  <div className="grid h-8 w-8 place-items-center rounded-xl bg-blue-50 text-blue-600 border border-blue-100">
-                    <Users className="h-4 w-4" />
-                  </div>
-                </div>
-                <div className="mt-3 flex items-baseline gap-2">
-                  <span className="text-3xl font-extrabold tracking-tight text-slate-900">
-                    {data.overview.totalUsers}
-                  </span>
-                  <span className="text-xs font-medium text-slate-500">accounts</span>
-                </div>
-                <div className="mt-3 flex items-center gap-2 text-xs text-slate-600 border-t border-slate-100 pt-2.5">
-                  <span className="inline-flex items-center gap-1 font-semibold text-blue-700">
-                    {data.overview.adminCount} Admins
-                  </span>
-                  <span>•</span>
-                  <span>{data.overview.memberCount} Members</span>
+      {/* View Switcher Pills */}
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 6,
+          background: "var(--surface-2)",
+          padding: 4,
+          borderRadius: 10,
+          border: "1px solid var(--border)",
+          width: "fit-content",
+          marginBottom: 24,
+        }}
+      >
+        <button
+          type="button"
+          onClick={() => setActiveTab("system")}
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 7,
+            padding: "6px 14px",
+            borderRadius: 7,
+            fontSize: 12.5,
+            fontWeight: activeTab === "system" ? 700 : 500,
+            background: activeTab === "system" ? "var(--surface)" : "transparent",
+            color: activeTab === "system" ? "var(--text)" : "var(--text-dim)",
+            border: activeTab === "system" ? "1px solid var(--border)" : "1px solid transparent",
+            boxShadow: activeTab === "system" ? "inset 0 1px 0 0 var(--border-specular), var(--shadow-xs)" : "none",
+            cursor: "pointer",
+            transition: "all 0.12s ease",
+          }}
+        >
+          <BarChart3 className="h-3.5 w-3.5" style={{ color: activeTab === "system" ? "var(--accent)" : "currentColor" }} />
+          <span>System Overview</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveTab("project")}
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 7,
+            padding: "6px 14px",
+            borderRadius: 7,
+            fontSize: 12.5,
+            fontWeight: activeTab === "project" ? 700 : 500,
+            background: activeTab === "project" ? "var(--surface)" : "transparent",
+            color: activeTab === "project" ? "var(--text)" : "var(--text-dim)",
+            border: activeTab === "project" ? "1px solid var(--border)" : "1px solid transparent",
+            boxShadow: activeTab === "project" ? "inset 0 1px 0 0 var(--border-specular), var(--shadow-xs)" : "none",
+            cursor: "pointer",
+            transition: "all 0.12s ease",
+          }}
+        >
+          <FolderKanban className="h-3.5 w-3.5" style={{ color: activeTab === "project" ? "var(--accent)" : "currentColor" }} />
+          <span>Project Deep-Dive</span>
+          <span
+            style={{
+              padding: "1px 6px",
+              borderRadius: 10,
+              fontSize: 10.5,
+              fontWeight: 700,
+              background: "var(--accent-soft)",
+              color: "var(--accent)",
+            }}
+          >
+            {data.projects.length}
+          </span>
+        </button>
+      </div>
+
+      {activeTab === "system" ? (
+        /* ========================================================== */
+        /*                     SYSTEM OVERVIEW TAB                    */
+        /* ========================================================== */
+        <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
+          {/* 5 Executive KPI Cards */}
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fit, minmax(210px, 1fr))",
+              gap: 16,
+            }}
+          >
+            {/* Card 1: Users */}
+            <div
+              style={{
+                background: "var(--surface)",
+                border: "1px solid var(--border)",
+                borderRadius: 12,
+                padding: "18px 20px",
+                boxShadow: "inset 0 1px 0 0 var(--border-specular), var(--shadow-xs)",
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                <span style={{ fontSize: 11, fontWeight: 700, color: "var(--text-faint)", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                  Total Users
+                </span>
+                <div
+                  style={{
+                    width: 32,
+                    height: 32,
+                    borderRadius: 8,
+                    background: "var(--info-soft)",
+                    color: "var(--info)",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    border: "1px solid var(--border)",
+                  }}
+                >
+                  <Users className="h-4 w-4" />
                 </div>
               </div>
-
-              {/* Card 2: Active Projects */}
-              <div className="group relative overflow-hidden rounded-2xl border border-blue-100 bg-white p-5 shadow-xs transition hover:shadow-md hover:border-blue-300">
-                <div className="flex items-center justify-between">
-                  <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500">
-                    Active Projects
-                  </span>
-                  <div className="grid h-8 w-8 place-items-center rounded-xl bg-indigo-50 text-indigo-600 border border-indigo-100">
-                    <FolderKanban className="h-4 w-4" />
-                  </div>
-                </div>
-                <div className="mt-3 flex items-baseline gap-2">
-                  <span className="text-3xl font-extrabold tracking-tight text-slate-900">
-                    {data.overview.activeProjects}
-                  </span>
-                  <span className="text-xs font-medium text-slate-500">
-                    of {data.overview.totalProjects} total
-                  </span>
-                </div>
-                <div className="mt-3 flex items-center gap-2 text-xs text-slate-600 border-t border-slate-100 pt-2.5">
-                  <span className="font-semibold text-indigo-700">100% Online</span>
-                  <span>•</span>
-                  <span>Tracked in DB</span>
-                </div>
+              <div style={{ marginTop: 8, display: "flex", alignItems: "baseline", gap: 6 }}>
+                <span style={{ fontSize: 28, fontWeight: 800, color: "var(--text)", letterSpacing: "-0.03em" }}>
+                  {data.overview.totalUsers}
+                </span>
+                <span style={{ fontSize: 12, color: "var(--text-dim)" }}>registered accounts</span>
               </div>
-
-              {/* Card 3: Issue Volume */}
-              <div className="group relative overflow-hidden rounded-2xl border border-blue-100 bg-white p-5 shadow-xs transition hover:shadow-md hover:border-blue-300">
-                <div className="flex items-center justify-between">
-                  <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500">
-                    Total Issues
-                  </span>
-                  <div className="grid h-8 w-8 place-items-center rounded-xl bg-amber-50 text-amber-600 border border-amber-100">
-                    <Layers className="h-4 w-4" />
-                  </div>
-                </div>
-                <div className="mt-3 flex items-baseline gap-2">
-                  <span className="text-3xl font-extrabold tracking-tight text-slate-900">
-                    {data.overview.totalIssues}
-                  </span>
-                  <span className="text-xs font-medium text-slate-500">across system</span>
-                </div>
-                <div className="mt-3 flex items-center gap-2 text-xs text-slate-600 border-t border-slate-100 pt-2.5">
-                  <span className="font-semibold text-rose-600">
-                    {data.overview.openIssues} Open
-                  </span>
-                  <span>•</span>
-                  <span className="font-semibold text-blue-600">
-                    {data.overview.inProgressIssues} Active
-                  </span>
-                  <span>•</span>
-                  <span className="font-semibold text-emerald-600">
-                    {data.overview.resolvedIssues + data.overview.closedIssues} Done
-                  </span>
-                </div>
-              </div>
-
-              {/* Card 4: Avg Resolution Time */}
-              <div className="group relative overflow-hidden rounded-2xl border border-blue-100 bg-white p-5 shadow-xs transition hover:shadow-md hover:border-blue-300">
-                <div className="flex items-center justify-between">
-                  <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500">
-                    Avg Resolution Time
-                  </span>
-                  <div className="grid h-8 w-8 place-items-center rounded-xl bg-emerald-50 text-emerald-600 border border-emerald-100">
-                    <Clock className="h-4 w-4" />
-                  </div>
-                </div>
-                <div className="mt-3 flex items-baseline gap-2">
-                  <span className="text-3xl font-extrabold tracking-tight text-slate-900">
-                    {data.overview.avgResolutionFormatted}
-                  </span>
-                  <span className="text-xs font-medium text-slate-500">turnaround</span>
-                </div>
-                <div className="mt-3 flex items-center justify-between text-xs text-slate-600 border-t border-slate-100 pt-2.5">
-                  <span className="font-semibold text-emerald-700">
-                    {data.overview.resolutionRatePercent}% Resolved Rate
-                  </span>
-                  <span className="text-slate-400">Total Lifecycle</span>
-                </div>
-              </div>
-            </div>
-
-            {/* Distribution Charts Grid */}
-            <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-              {/* Status Distribution */}
-              <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-xs">
-                <div className="flex items-center justify-between pb-3 border-b border-slate-100">
-                  <h3 className="text-sm font-bold text-slate-900">Status Distribution</h3>
-                  <span className="text-xs font-semibold text-slate-500">
-                    {data.overview.totalIssues} total
-                  </span>
-                </div>
-                <div className="mt-4 space-y-3">
-                  {data.statusDistribution.map((item) => (
-                    <div key={item.status} className="space-y-1">
-                      <div className="flex items-center justify-between text-xs">
-                        <span className="font-semibold text-slate-700">{item.label}</span>
-                        <div className="flex items-center gap-2">
-                          <span className="font-bold text-slate-900">{item.count}</span>
-                          <span className="text-slate-400">({item.percentage}%)</span>
-                        </div>
-                      </div>
-                      <div className="h-2 w-full rounded-full bg-slate-100 overflow-hidden">
-                        <div
-                          className="h-full rounded-full transition-all duration-500"
-                          style={{
-                            width: `${item.percentage}%`,
-                            backgroundColor: item.color,
-                          }}
-                        />
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* Severity Breakdown */}
-              <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-xs">
-                <div className="flex items-center justify-between pb-3 border-b border-slate-100">
-                  <h3 className="text-sm font-bold text-slate-900">Severity Breakdown</h3>
-                  <span className="text-xs font-semibold text-slate-500">Risk Profile</span>
-                </div>
-                <div className="mt-4 space-y-3">
-                  {data.severityDistribution.map((item) => (
-                    <div key={item.severity} className="space-y-1">
-                      <div className="flex items-center justify-between text-xs">
-                        <span
-                          className="font-bold"
-                          style={{ color: item.color }}
-                        >
-                          {item.severity}
-                        </span>
-                        <div className="flex items-center gap-2">
-                          <span className="font-bold text-slate-900">{item.count}</span>
-                          <span className="text-slate-400">({item.percentage}%)</span>
-                        </div>
-                      </div>
-                      <div className="h-2 w-full rounded-full bg-slate-100 overflow-hidden">
-                        <div
-                          className="h-full rounded-full transition-all duration-500"
-                          style={{
-                            width: `${item.percentage}%`,
-                            backgroundColor: item.color,
-                          }}
-                        />
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* Priority Breakdown */}
-              <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-xs">
-                <div className="flex items-center justify-between pb-3 border-b border-slate-100">
-                  <h3 className="text-sm font-bold text-slate-900">Priority Breakdown</h3>
-                  <span className="text-xs font-semibold text-slate-500">Queue Urgency</span>
-                </div>
-                <div className="mt-4 space-y-3">
-                  {data.priorityDistribution.map((item) => (
-                    <div key={item.priority} className="space-y-1">
-                      <div className="flex items-center justify-between text-xs">
-                        <span
-                          className="font-bold"
-                          style={{ color: item.color }}
-                        >
-                          {item.priority}
-                        </span>
-                        <div className="flex items-center gap-2">
-                          <span className="font-bold text-slate-900">{item.count}</span>
-                          <span className="text-slate-400">({item.percentage}%)</span>
-                        </div>
-                      </div>
-                      <div className="h-2 w-full rounded-full bg-slate-100 overflow-hidden">
-                        <div
-                          className="h-full rounded-full transition-all duration-500"
-                          style={{
-                            width: `${item.percentage}%`,
-                            backgroundColor: item.color,
-                          }}
-                        />
-                      </div>
-                    </div>
-                  ))}
-                </div>
+              <div
+                style={{
+                  marginTop: 12,
+                  paddingTop: 10,
+                  borderTop: "1px solid var(--border)",
+                  fontSize: 12,
+                  color: "var(--text-dim)",
+                  display: "flex",
+                  gap: 10,
+                }}
+              >
+                <span style={{ fontWeight: 600, color: "var(--accent)" }}>
+                  {data.overview.adminCount} Admins
+                </span>
+                <span>•</span>
+                <span>{data.overview.memberCount} Members</span>
               </div>
             </div>
 
-            {/* Project Performance Comparison Matrix */}
-            <div className="rounded-2xl border border-slate-200 bg-white shadow-xs overflow-hidden">
-              <div className="p-5 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-                <div>
-                  <h3 className="text-base font-bold text-slate-900">
-                    Project Performance & Analytics Matrix
-                  </h3>
-                  <p className="text-xs text-slate-500 mt-0.5">
-                    Compare velocity, issue counts, and download individual PDF audits per project.
-                  </p>
-                </div>
-                <div className="relative w-full sm:w-64">
-                  <Search className="absolute left-3 top-2.5 h-3.5 w-3.5 text-slate-400" />
-                  <input
-                    type="text"
-                    placeholder="Search projects..."
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    className="w-full rounded-xl border border-slate-200 bg-slate-50 py-1.5 pl-8 pr-3 text-xs text-slate-800 placeholder-slate-400 focus:border-blue-500 focus:bg-white focus:outline-hidden transition"
-                  />
+            {/* Card 2: Active Projects */}
+            <div
+              style={{
+                background: "var(--surface)",
+                border: "1px solid var(--border)",
+                borderRadius: 12,
+                padding: "18px 20px",
+                boxShadow: "inset 0 1px 0 0 var(--border-specular), var(--shadow-xs)",
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                <span style={{ fontSize: 11, fontWeight: 700, color: "var(--text-faint)", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                  Active Projects
+                </span>
+                <div
+                  style={{
+                    width: 32,
+                    height: 32,
+                    borderRadius: 8,
+                    background: "var(--accent-soft)",
+                    color: "var(--accent)",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    border: "1px solid var(--border)",
+                  }}
+                >
+                  <FolderKanban className="h-4 w-4" />
                 </div>
               </div>
+              <div style={{ marginTop: 8, display: "flex", alignItems: "baseline", gap: 6 }}>
+                <span style={{ fontSize: 28, fontWeight: 800, color: "var(--text)", letterSpacing: "-0.03em" }}>
+                  {data.overview.activeProjects}
+                </span>
+                <span style={{ fontSize: 12, color: "var(--text-dim)" }}>
+                  of {data.overview.totalProjects} total
+                </span>
+              </div>
+              <div
+                style={{
+                  marginTop: 12,
+                  paddingTop: 10,
+                  borderTop: "1px solid var(--border)",
+                  fontSize: 12,
+                  color: "var(--text-dim)",
+                  display: "flex",
+                  gap: 10,
+                }}
+              >
+                <span style={{ fontWeight: 600, color: "var(--ok)" }}>100% Operational</span>
+                <span>•</span>
+                <span>Database tracked</span>
+              </div>
+            </div>
 
-              <div className="overflow-x-auto">
-                <table className="w-full text-left text-xs">
-                  <thead className="border-b border-slate-200 bg-slate-50/80 text-[11px] font-bold text-slate-500 uppercase tracking-wider">
-                    <tr>
-                      <th className="py-3 px-4">Project</th>
-                      <th className="py-3 px-4">Team</th>
-                      <th className="py-3 px-4 text-right">Total</th>
-                      <th className="py-3 px-4 text-right">Open</th>
-                      <th className="py-3 px-4 text-right">Active</th>
-                      <th className="py-3 px-4 text-right">Resolved</th>
-                      <th className="py-3 px-4 text-right">Avg Resolution</th>
-                      <th className="py-3 px-4">Resolution Rate</th>
-                      <th className="py-3 px-4 text-right">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100">
-                    {filteredProjects.length === 0 ? (
-                      <tr>
-                        <td colSpan={9} className="py-8 text-center text-slate-400">
-                          No matching projects found
-                        </td>
-                      </tr>
-                    ) : (
-                      filteredProjects.map((p) => (
-                        <tr
-                          key={p.id}
-                          className="hover:bg-blue-50/40 transition group cursor-pointer"
-                          onClick={() => {
-                            setSelectedProjectId(p.id);
-                            setActiveTab("project");
-                          }}
-                        >
-                          <td className="py-3.5 px-4">
-                            <div className="flex items-center gap-2">
-                              <span className="rounded-md bg-blue-100 px-2 py-0.5 text-[10px] font-bold text-blue-700 font-mono">
-                                {p.key}
-                              </span>
-                              <span className="font-semibold text-slate-900 group-hover:text-blue-700 transition">
-                                {p.name}
-                              </span>
-                            </div>
-                          </td>
-                          <td className="py-3.5 px-4 text-slate-600">
-                            {p.membersCount} members
-                          </td>
-                          <td className="py-3.5 px-4 text-right font-bold text-slate-900">
-                            {p.totalIssues}
-                          </td>
-                          <td className="py-3.5 px-4 text-right font-medium text-rose-600">
-                            {p.openIssues}
-                          </td>
-                          <td className="py-3.5 px-4 text-right font-medium text-blue-600">
-                            {p.inProgressIssues}
-                          </td>
-                          <td className="py-3.5 px-4 text-right font-semibold text-emerald-600">
-                            {p.resolvedIssues + p.closedIssues}
-                          </td>
-                          <td className="py-3.5 px-4 text-right font-bold text-slate-800">
-                            {p.avgResolutionFormatted}
-                          </td>
-                          <td className="py-3.5 px-4">
-                            <div className="flex items-center gap-2">
-                              <div className="h-1.5 w-16 rounded-full bg-slate-100 overflow-hidden">
-                                <div
-                                  className="h-full rounded-full bg-blue-600"
-                                  style={{ width: `${p.resolutionRatePercent}%` }}
-                                />
-                              </div>
-                              <span className="font-semibold text-slate-700">
-                                {p.resolutionRatePercent}%
-                              </span>
-                            </div>
-                          </td>
-                          <td
-                            className="py-3.5 px-4 text-right"
-                            onClick={(e) => e.stopPropagation()}
-                          >
-                            <div className="flex items-center justify-end gap-1.5">
-                              <button
-                                type="button"
-                                title="Download individual project PDF"
-                                onClick={() => handleDownloadPdf(p.id)}
-                                disabled={downloadingPdf === p.id}
-                                className="flex items-center gap-1.5 rounded-lg border border-blue-200 bg-blue-50/70 px-2.5 py-1 text-[11px] font-bold text-blue-700 hover:bg-blue-100 transition cursor-pointer"
-                              >
-                                <Download className="h-3 w-3" />
-                                <span>PDF</span>
-                              </button>
-                              <Link
-                                href={`/projects/${p.id}`}
-                                className="rounded-lg border border-slate-200 p-1 text-slate-500 hover:text-slate-900 hover:bg-slate-100 transition"
-                                title="Open project board"
-                              >
-                                <ExternalLink className="h-3.5 w-3.5" />
-                              </Link>
-                            </div>
-                          </td>
-                        </tr>
-                      ))
-                    )}
-                  </tbody>
-                </table>
+            {/* Card 3: Issue Volume */}
+            <div
+              style={{
+                background: "var(--surface)",
+                border: "1px solid var(--border)",
+                borderRadius: 12,
+                padding: "18px 20px",
+                boxShadow: "inset 0 1px 0 0 var(--border-specular), var(--shadow-xs)",
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                <span style={{ fontSize: 11, fontWeight: 700, color: "var(--text-faint)", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                  Total Issues
+                </span>
+                <div
+                  style={{
+                    width: 32,
+                    height: 32,
+                    borderRadius: 8,
+                    background: "var(--warn-soft)",
+                    color: "var(--warn)",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    border: "1px solid var(--border)",
+                  }}
+                >
+                  <Layers className="h-4 w-4" />
+                </div>
+              </div>
+              <div style={{ marginTop: 8, display: "flex", alignItems: "baseline", gap: 6 }}>
+                <span style={{ fontSize: 28, fontWeight: 800, color: "var(--text)", letterSpacing: "-0.03em" }}>
+                  {data.overview.totalIssues}
+                </span>
+                <span style={{ fontSize: 12, color: "var(--text-dim)" }}>workspace total</span>
+              </div>
+              <div
+                style={{
+                  marginTop: 12,
+                  paddingTop: 10,
+                  borderTop: "1px solid var(--border)",
+                  fontSize: 12,
+                  color: "var(--text-dim)",
+                  display: "flex",
+                  gap: 8,
+                  alignItems: "center",
+                }}
+              >
+                <span style={{ fontWeight: 600, color: "var(--crit)" }}>{data.overview.openIssues} Open</span>
+                <span>•</span>
+                <span style={{ fontWeight: 600, color: "var(--info)" }}>{data.overview.inProgressIssues} Active</span>
+                <span>•</span>
+                <span style={{ fontWeight: 600, color: "var(--ok)" }}>
+                  {data.overview.resolvedIssues + data.overview.closedIssues} Done
+                </span>
+              </div>
+            </div>
+
+            {/* Card 4: Issues Raised by QA/Testers */}
+            <div
+              style={{
+                background: "var(--surface)",
+                border: "1px solid var(--border)",
+                borderRadius: 12,
+                padding: "18px 20px",
+                boxShadow: "inset 0 1px 0 0 var(--border-specular), var(--shadow-xs)",
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                <span style={{ fontSize: 11, fontWeight: 700, color: "var(--text-faint)", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                  Issues Raised by Testers
+                </span>
+                <div
+                  style={{
+                    width: 32,
+                    height: 32,
+                    borderRadius: 8,
+                    background: "var(--crit-soft)",
+                    color: "var(--crit)",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    border: "1px solid var(--border)",
+                  }}
+                >
+                  <Bug className="h-4 w-4" />
+                </div>
+              </div>
+              <div style={{ marginTop: 8, display: "flex", alignItems: "baseline", gap: 6 }}>
+                <span style={{ fontSize: 28, fontWeight: 800, color: "var(--crit)", letterSpacing: "-0.03em" }}>
+                  {totalTesterIssues}
+                </span>
+                <span style={{ fontSize: 12, color: "var(--text-dim)" }}>issues filed</span>
+              </div>
+              <div
+                style={{
+                  marginTop: 12,
+                  paddingTop: 10,
+                  borderTop: "1px solid var(--border)",
+                  fontSize: 12,
+                  color: "var(--text-dim)",
+                  display: "flex",
+                  gap: 10,
+                }}
+              >
+                <span style={{ fontWeight: 600, color: "var(--text)" }}>
+                  {data.testers.length} Active QA Testers
+                </span>
+                <span>•</span>
+                <span>
+                  {data.overview.totalIssues > 0
+                    ? `${Math.round((totalTesterIssues / data.overview.totalIssues) * 100)}% of total`
+                    : "0% of total"}
+                </span>
+              </div>
+            </div>
+
+            {/* Card 5: Avg Resolution Time */}
+            <div
+              style={{
+                background: "var(--surface)",
+                border: "1px solid var(--border)",
+                borderRadius: 12,
+                padding: "18px 20px",
+                boxShadow: "inset 0 1px 0 0 var(--border-specular), var(--shadow-xs)",
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                <span style={{ fontSize: 11, fontWeight: 700, color: "var(--text-faint)", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                  Avg Resolution Time
+                </span>
+                <div
+                  style={{
+                    width: 32,
+                    height: 32,
+                    borderRadius: 8,
+                    background: "var(--ok-soft)",
+                    color: "var(--ok)",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    border: "1px solid var(--border)",
+                  }}
+                >
+                  <Clock className="h-4 w-4" />
+                </div>
+              </div>
+              <div style={{ marginTop: 8, display: "flex", alignItems: "baseline", gap: 6 }}>
+                <span style={{ fontSize: 28, fontWeight: 800, color: "var(--info)", letterSpacing: "-0.03em" }}>
+                  {data.overview.avgResolutionFormatted}
+                </span>
+                <span style={{ fontSize: 12, color: "var(--text-dim)" }}>turnaround</span>
+              </div>
+              <div
+                style={{
+                  marginTop: 12,
+                  paddingTop: 10,
+                  borderTop: "1px solid var(--border)",
+                  fontSize: 12,
+                  color: "var(--text-dim)",
+                  display: "flex",
+                  justifyContent: "space-between",
+                }}
+              >
+                <span style={{ fontWeight: 700, color: "var(--ok)" }}>
+                  {data.overview.resolutionRatePercent}% Resolved
+                </span>
+                <span style={{ color: "var(--text-faint)" }}>Ticket Close Rate</span>
               </div>
             </div>
           </div>
-        ) : (
-          /* ========================================================== */
-          /*                  PROJECT DEEP-DIVE TAB                     */
-          /* ========================================================== */
-          <div className="space-y-8 animate-in fade-in duration-300">
-            {/* Project Picker Header */}
-            <div className="rounded-2xl border border-blue-200 bg-white p-5 shadow-xs">
-              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-                <div className="flex items-center gap-3">
-                  <div className="grid h-12 w-12 place-items-center rounded-xl bg-blue-600 text-white font-extrabold text-sm shadow-md shadow-blue-500/20 font-mono">
-                    {selectedProject?.key || "PRJ"}
+
+          {/* ======================================================== */}
+          {/*   SYSTEM DISTRIBUTION METRICS: STATUS & SEVERITY & RISK  */}
+          {/* ======================================================== */}
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fit, minmax(340px, 1fr))",
+              gap: 16,
+            }}
+          >
+            {/* Status Pipeline Distribution */}
+            <div
+              style={{
+                background: "var(--surface)",
+                border: "1px solid var(--border)",
+                borderRadius: 12,
+                padding: "20px 22px",
+                boxShadow: "inset 0 1px 0 0 var(--border-specular), var(--shadow-xs)",
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <Activity className="h-4 w-4" style={{ color: "var(--accent)" }} />
+                  <h3 style={{ fontSize: 14.5, fontWeight: 700, margin: 0, color: "var(--text)" }}>
+                    Issue Lifecycle Distribution
+                  </h3>
+                </div>
+                <span style={{ fontSize: 11.5, color: "var(--text-faint)", fontWeight: 600 }}>
+                  {data.overview.totalIssues} Tickets Tracked
+                </span>
+              </div>
+
+              {/* Segmented Bar */}
+              <div
+                style={{
+                  height: 10,
+                  borderRadius: 6,
+                  overflow: "hidden",
+                  display: "flex",
+                  background: "var(--surface-2)",
+                  border: "1px solid var(--border)",
+                  marginBottom: 16,
+                }}
+              >
+                {data.statusDistribution.map((st) => (
+                  <div
+                    key={st.status}
+                    style={{
+                      height: "100%",
+                      width: `${st.percentage}%`,
+                      background: st.color,
+                      transition: "width 0.3s ease",
+                    }}
+                    title={`${st.label}: ${st.count} (${st.percentage}%)`}
+                  />
+                ))}
+              </div>
+
+              {/* Status Tags Grid */}
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))", gap: 8 }}>
+                {data.statusDistribution.map((st) => (
+                  <div
+                    key={st.status}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      padding: "6px 10px",
+                      borderRadius: 6,
+                      background: "var(--surface-2)",
+                      border: "1px solid var(--border)",
+                      fontSize: 11.5,
+                    }}
+                  >
+                    <span style={{ display: "flex", alignItems: "center", gap: 6, color: "var(--text)" }}>
+                      <span style={{ width: 8, height: 8, borderRadius: "50%", background: st.color }} />
+                      <span style={{ fontWeight: 600 }}>{st.label}</span>
+                    </span>
+                    <span style={{ fontWeight: 700, color: "var(--text-dim)", fontFamily: "monospace" }}>
+                      {st.count}
+                    </span>
                   </div>
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <h2 className="text-lg font-extrabold text-slate-900">
-                        {selectedProject?.name}
-                      </h2>
-                      <span className="rounded bg-blue-50 px-2 py-0.5 text-xs font-mono font-bold text-blue-700 border border-blue-200">
-                        {selectedProject?.key}
+                ))}
+              </div>
+            </div>
+
+            {/* Severity & Risk Breakdown */}
+            <div
+              style={{
+                background: "var(--surface)",
+                border: "1px solid var(--border)",
+                borderRadius: 12,
+                padding: "20px 22px",
+                boxShadow: "inset 0 1px 0 0 var(--border-specular), var(--shadow-xs)",
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <Flame className="h-4 w-4" style={{ color: "var(--crit)" }} />
+                  <h3 style={{ fontSize: 14.5, fontWeight: 700, margin: 0, color: "var(--text)" }}>
+                    Severity & Defect Risk Profile
+                  </h3>
+                </div>
+                <span style={{ fontSize: 11.5, color: "var(--text-faint)", fontWeight: 600 }}>
+                  Workspace Impact
+                </span>
+              </div>
+
+              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                {data.severityDistribution.map((sev) => (
+                  <div key={sev.severity} style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", fontSize: 12 }}>
+                      <span style={{ fontWeight: 700, color: sev.color }}>{sev.severity}</span>
+                      <span style={{ color: "var(--text-dim)", fontWeight: 600 }}>
+                        {sev.count} issues ({sev.percentage}%)
                       </span>
                     </div>
-                    <p className="text-xs text-slate-500 mt-0.5">
-                      {selectedProject?.description || "No project description provided."}
-                    </p>
+                    <div style={{ height: 6, background: "var(--surface-2)", borderRadius: 3, overflow: "hidden", border: "1px solid var(--border)" }}>
+                      <div
+                        style={{
+                          height: "100%",
+                          width: `${sev.percentage}%`,
+                          background: sev.color,
+                          borderRadius: 3,
+                          transition: "width 0.3s ease",
+                        }}
+                      />
+                    </div>
                   </div>
-                </div>
-
-                {/* Project Selector & Actions */}
-                <div className="flex flex-wrap items-center gap-3">
-                  <select
-                    value={selectedProjectId}
-                    onChange={(e) => setSelectedProjectId(e.target.value)}
-                    className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-semibold text-slate-800 focus:border-blue-500 focus:bg-white focus:outline-hidden transition"
-                  >
-                    {data.projects.map((proj) => (
-                      <option key={proj.id} value={proj.id}>
-                        {proj.name} ({proj.key})
-                      </option>
-                    ))}
-                  </select>
-
-                  <button
-                    type="button"
-                    onClick={() => handleDownloadPdf(selectedProject?.id)}
-                    disabled={downloadingPdf === selectedProject?.id}
-                    className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 px-4 py-2 text-xs font-bold text-white shadow-md shadow-blue-500/20 hover:from-blue-700 hover:to-indigo-700 transition cursor-pointer disabled:opacity-50"
-                  >
-                    <Download className="h-3.5 w-3.5" />
-                    <span>
-                      {downloadingPdf === selectedProject?.id
-                        ? "Generating PDF..."
-                        : `Download ${selectedProject?.key} PDF`}
-                    </span>
-                  </button>
-
-                  <Link
-                    href={`/projects/${selectedProject?.id}`}
-                    className="flex items-center gap-1.5 rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-100 transition"
-                  >
-                    <span>Open Board</span>
-                    <ArrowUpRight className="h-3.5 w-3.5 text-slate-400" />
-                  </Link>
-                </div>
-              </div>
-            </div>
-
-            {/* Project Specific KPI Cards */}
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-              <div className="rounded-2xl border border-blue-100 bg-white p-5 shadow-xs">
-                <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500">
-                  Project Total Issues
-                </span>
-                <div className="mt-2 text-3xl font-extrabold text-slate-900">
-                  {selectedProject?.totalIssues || 0}
-                </div>
-                <div className="mt-2 text-xs text-slate-500">
-                  {selectedProject?.openIssues || 0} Open • {selectedProject?.inProgressIssues || 0} In
-                  Progress
-                </div>
-              </div>
-
-              <div className="rounded-2xl border border-blue-100 bg-white p-5 shadow-xs">
-                <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500">
-                  Assigned Team
-                </span>
-                <div className="mt-2 text-3xl font-extrabold text-slate-900">
-                  {selectedProject?.membersCount || 0}
-                </div>
-                <div className="mt-2 text-xs text-slate-500">
-                  Project staff & contributors
-                </div>
-              </div>
-
-              <div className="rounded-2xl border border-blue-100 bg-white p-5 shadow-xs">
-                <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500">
-                  Avg Turnaround
-                </span>
-                <div className="mt-2 text-3xl font-extrabold text-blue-700">
-                  {selectedProject?.avgResolutionFormatted || "N/A"}
-                </div>
-                <div className="mt-2 text-xs text-slate-500">
-                  Average time to fix/close
-                </div>
-              </div>
-
-              <div className="rounded-2xl border border-blue-100 bg-white p-5 shadow-xs">
-                <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500">
-                  Resolution Rate
-                </span>
-                <div className="mt-2 text-3xl font-extrabold text-emerald-600">
-                  {selectedProject?.resolutionRatePercent || 0}%
-                </div>
-                <div className="mt-2 text-xs text-slate-500">
-                  {(selectedProject?.resolvedIssues || 0) + (selectedProject?.closedIssues || 0)} issues
-                  completed
-                </div>
-              </div>
-            </div>
-
-            {/* Team Members Workload Table */}
-            <div className="rounded-2xl border border-slate-200 bg-white shadow-xs overflow-hidden">
-              <div className="p-5 border-b border-slate-100 flex items-center justify-between">
-                <div>
-                  <h3 className="text-sm font-bold text-slate-900">
-                    Team Member Workload & Contributions
-                  </h3>
-                  <p className="text-xs text-slate-500 mt-0.5">
-                    Individual issue distribution and resolved turnover for this project.
-                  </p>
-                </div>
-                <span className="rounded-full bg-blue-50 px-3 py-1 text-xs font-bold text-blue-700">
-                  {selectedProject?.members.length} Members
-                </span>
-              </div>
-
-              <div className="overflow-x-auto">
-                <table className="w-full text-left text-xs">
-                  <thead className="border-b border-slate-200 bg-slate-50/80 text-[11px] font-bold text-slate-500 uppercase tracking-wider">
-                    <tr>
-                      <th className="py-3 px-4">Member</th>
-                      <th className="py-3 px-4">Email</th>
-                      <th className="py-3 px-4">Role In Project</th>
-                      <th className="py-3 px-4 text-right">Assigned Issues</th>
-                      <th className="py-3 px-4 text-right">Resolved Issues</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100">
-                    {selectedProject?.members.length === 0 ? (
-                      <tr>
-                        <td colSpan={5} className="py-8 text-center text-slate-400">
-                          No team members assigned to this project
-                        </td>
-                      </tr>
-                    ) : (
-                      selectedProject?.members.map((m) => (
-                        <tr key={m.id} className="hover:bg-slate-50 transition">
-                          <td className="py-3 px-4 font-semibold text-slate-900">
-                            {m.name}
-                          </td>
-                          <td className="py-3 px-4 text-slate-500 font-mono text-[11px]">
-                            {m.email}
-                          </td>
-                          <td className="py-3 px-4">
-                            <span className="rounded bg-slate-100 px-2 py-0.5 text-[10px] font-bold text-slate-700">
-                              {m.roleInProject}
-                            </span>
-                          </td>
-                          <td className="py-3 px-4 text-right font-medium text-slate-800">
-                            {m.assignedIssuesCount}
-                          </td>
-                          <td className="py-3 px-4 text-right font-bold text-emerald-600">
-                            {m.resolvedIssuesCount}
-                          </td>
-                        </tr>
-                      ))
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-
-            {/* Recent Issues List */}
-            <div className="rounded-2xl border border-slate-200 bg-white shadow-xs overflow-hidden">
-              <div className="p-5 border-b border-slate-100 flex items-center justify-between">
-                <div>
-                  <h3 className="text-sm font-bold text-slate-900">
-                    Recent Issues Recorded
-                  </h3>
-                  <p className="text-xs text-slate-500 mt-0.5">
-                    Latest activity and tickets in {selectedProject?.name}.
-                  </p>
-                </div>
-              </div>
-
-              <div className="overflow-x-auto">
-                <table className="w-full text-left text-xs">
-                  <thead className="border-b border-slate-200 bg-slate-50/80 text-[11px] font-bold text-slate-500 uppercase tracking-wider">
-                    <tr>
-                      <th className="py-3 px-4">Key</th>
-                      <th className="py-3 px-4">Title</th>
-                      <th className="py-3 px-4">Status</th>
-                      <th className="py-3 px-4">Severity</th>
-                      <th className="py-3 px-4">Priority</th>
-                      <th className="py-3 px-4">Assignee</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100">
-                    {selectedProject?.recentIssues.length === 0 ? (
-                      <tr>
-                        <td colSpan={6} className="py-8 text-center text-slate-400">
-                          No issues created yet in this project
-                        </td>
-                      </tr>
-                    ) : (
-                      selectedProject?.recentIssues.map((iss) => (
-                        <tr key={iss.id} className="hover:bg-slate-50 transition">
-                          <td className="py-3 px-4 font-mono font-bold text-blue-700">
-                            {iss.key}
-                          </td>
-                          <td className="py-3 px-4 font-medium text-slate-900">
-                            {iss.title}
-                          </td>
-                          <td className="py-3 px-4">
-                            <span className="rounded bg-slate-100 px-2 py-0.5 text-[10px] font-bold text-slate-700">
-                              {iss.status}
-                            </span>
-                          </td>
-                          <td className="py-3 px-4">
-                            <span
-                              className={`rounded px-2 py-0.5 text-[10px] font-bold ${
-                                iss.severity === "CRITICAL"
-                                  ? "bg-rose-50 text-rose-700"
-                                  : iss.severity === "HIGH"
-                                  ? "bg-orange-50 text-orange-700"
-                                  : "bg-slate-100 text-slate-700"
-                              }`}
-                            >
-                              {iss.severity}
-                            </span>
-                          </td>
-                          <td className="py-3 px-4 font-semibold text-slate-600">
-                            {iss.priority}
-                          </td>
-                          <td className="py-3 px-4 text-slate-500">
-                            {iss.assigneeName || "Unassigned"}
-                          </td>
-                        </tr>
-                      ))
-                    )}
-                  </tbody>
-                </table>
+                ))}
               </div>
             </div>
           </div>
-        )}
-      </div>
+
+          {/* ======================================================== */}
+          {/*          DEVELOPER RESOLUTION VELOCITY & GRAPHS          */}
+          {/* ======================================================== */}
+          <div
+            style={{
+              background: "var(--surface)",
+              border: "1px solid var(--border)",
+              borderRadius: 12,
+              padding: "20px 22px",
+              boxShadow: "inset 0 1px 0 0 var(--border-specular), var(--shadow-xs)",
+            }}
+          >
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                flexWrap: "wrap",
+                gap: 12,
+                paddingBottom: 16,
+                borderBottom: "1px solid var(--border)",
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                <div
+                  style={{
+                    width: 34,
+                    height: 34,
+                    borderRadius: 8,
+                    background: "var(--info-soft)",
+                    color: "var(--info)",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    border: "1px solid var(--border)",
+                  }}
+                >
+                  <Code2 className="h-4 w-4" />
+                </div>
+                <div>
+                  <h3 style={{ fontSize: 15, fontWeight: 700, margin: 0, color: "var(--text)" }}>
+                    Developer Issue Resolution & Turnaround Velocity
+                  </h3>
+                  <p style={{ margin: "2px 0 0", fontSize: 12, color: "var(--text-dim)" }}>
+                    Assigned tickets vs solved tickets, resolution success rates, and turnaround speeds.
+                  </p>
+                </div>
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: 14, fontSize: 12 }}>
+                <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                  <span style={{ width: 10, height: 10, borderRadius: 2, background: "var(--info)" }} />
+                  <span style={{ color: "var(--text-dim)" }}>Assigned</span>
+                </span>
+                <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                  <span style={{ width: 10, height: 10, borderRadius: 2, background: "var(--ok)" }} />
+                  <span style={{ color: "var(--text-dim)" }}>Resolved</span>
+                </span>
+              </div>
+            </div>
+
+            {/* Developer Performance Graph (Comparative Bars) */}
+            <div style={{ marginTop: 20, display: "flex", flexDirection: "column", gap: 18 }}>
+              {data.developers.length === 0 ? (
+                <div style={{ padding: 24, textAlign: "center", color: "var(--text-faint)", fontSize: 13 }}>
+                  No issues have been assigned to developers yet.
+                </div>
+              ) : (
+                data.developers.map((dev) => (
+                  <div key={dev.id} style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 8, fontSize: 13 }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                        <span style={{ fontWeight: 700, color: "var(--text)" }}>{dev.name}</span>
+                        <span style={{ color: "var(--text-faint)", fontSize: 11.5, fontFamily: "monospace" }}>
+                          ({dev.email})
+                        </span>
+                      </div>
+                      <div style={{ display: "flex", alignItems: "center", gap: 12, fontSize: 12 }}>
+                        <span style={{ fontWeight: 600, color: "var(--text)" }}>
+                          {dev.resolvedCount} of {dev.assignedCount} resolved
+                        </span>
+                        <span
+                          style={{
+                            padding: "2px 8px",
+                            borderRadius: 12,
+                            fontSize: 11,
+                            fontWeight: 700,
+                            background: dev.resolutionRate >= 80 ? "var(--ok-soft)" : "var(--info-soft)",
+                            color: dev.resolutionRate >= 80 ? "var(--ok)" : "var(--info)",
+                            border: "1px solid var(--border)",
+                          }}
+                        >
+                          {dev.resolutionRate}% success
+                        </span>
+                        <span
+                          style={{
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: 4,
+                            padding: "2px 8px",
+                            borderRadius: 6,
+                            fontSize: 11,
+                            fontWeight: 700,
+                            background: "var(--surface-2)",
+                            color: "var(--text-dim)",
+                            border: "1px solid var(--border)",
+                          }}
+                        >
+                          <Clock style={{ width: 11, height: 11 }} />
+                          {dev.avgResolutionFormatted} turnaround
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Comparative Dual Bars */}
+                    <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                      {/* Assigned bar */}
+                      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                        <span style={{ width: 60, fontSize: 11, color: "var(--text-dim)" }}>Assigned</span>
+                        <div style={{ flex: 1, height: 8, background: "var(--surface-2)", borderRadius: 4, overflow: "hidden", border: "1px solid var(--border)" }}>
+                          <div
+                            style={{
+                              height: "100%",
+                              width: `${(dev.assignedCount / maxDevAssigned) * 100}%`,
+                              background: "linear-gradient(90deg, #3b82f6, #60a5fa)",
+                              borderRadius: 4,
+                              transition: "width 0.4s ease",
+                            }}
+                          />
+                        </div>
+                        <span style={{ width: 24, fontSize: 11, fontWeight: 700, color: "var(--text)", textAlign: "right" }}>
+                          {dev.assignedCount}
+                        </span>
+                      </div>
+
+                      {/* Resolved bar */}
+                      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                        <span style={{ width: 60, fontSize: 11, color: "var(--text-dim)" }}>Resolved</span>
+                        <div style={{ flex: 1, height: 8, background: "var(--surface-2)", borderRadius: 4, overflow: "hidden", border: "1px solid var(--border)" }}>
+                          <div
+                            style={{
+                              height: "100%",
+                              width: `${(dev.resolvedCount / maxDevAssigned) * 100}%`,
+                              background: "linear-gradient(90deg, #10b981, #34d399)",
+                              borderRadius: 4,
+                              transition: "width 0.4s ease",
+                            }}
+                          />
+                        </div>
+                        <span style={{ width: 24, fontSize: 11, fontWeight: 700, color: "var(--ok)", textAlign: "right" }}>
+                          {dev.resolvedCount}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Projects worked on pills */}
+                    <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 4, flexWrap: "wrap" }}>
+                      <span style={{ fontSize: 11, color: "var(--text-faint)" }}>Projects:</span>
+                      {dev.projects.map((p) => (
+                        <span
+                          key={p.projectId}
+                          style={{
+                            padding: "1px 6px",
+                            borderRadius: 4,
+                            fontSize: 10.5,
+                            fontWeight: 600,
+                            fontFamily: "monospace",
+                            background: "var(--surface-2)",
+                            color: "var(--text-dim)",
+                            border: "1px solid var(--border)",
+                          }}
+                        >
+                          {p.projectKey}: {p.resolved}/{p.assigned} resolved
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+
+          {/* ======================================================== */}
+          {/*     TESTER BUG REPORTING BY PROJECT GRAPHS & STATS       */}
+          {/* ======================================================== */}
+          <div
+            style={{
+              background: "var(--surface)",
+              border: "1px solid var(--border)",
+              borderRadius: 12,
+              padding: "20px 22px",
+              boxShadow: "inset 0 1px 0 0 var(--border-specular), var(--shadow-xs)",
+            }}
+          >
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                flexWrap: "wrap",
+                gap: 12,
+                paddingBottom: 16,
+                borderBottom: "1px solid var(--border)",
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                <div
+                  style={{
+                    width: 34,
+                    height: 34,
+                    borderRadius: 8,
+                    background: "var(--crit-soft)",
+                    color: "var(--crit)",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    border: "1px solid var(--border)",
+                  }}
+                >
+                  <Bug className="h-4 w-4" />
+                </div>
+                <div>
+                  <h3 style={{ fontSize: 15, fontWeight: 700, margin: 0, color: "var(--text)" }}>
+                    Number of Issues Raised by Testers (Categorized by Project)
+                  </h3>
+                  <p style={{ margin: "2px 0 0", fontSize: 12, color: "var(--text-dim)" }}>
+                    Total defect intake, severity breakdown, and project-by-project issue count per tester.
+                  </p>
+                </div>
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <span
+                  style={{
+                    padding: "4px 10px",
+                    borderRadius: 12,
+                    fontSize: 11,
+                    fontWeight: 800,
+                    background: "var(--crit-soft)",
+                    color: "var(--crit)",
+                    border: "1px solid var(--border)",
+                  }}
+                >
+                  {totalTesterIssues} Total Issues Raised
+                </span>
+                <span
+                  style={{
+                    padding: "4px 10px",
+                    borderRadius: 12,
+                    fontSize: 11,
+                    fontWeight: 700,
+                    background: "var(--surface-2)",
+                    color: "var(--text)",
+                    border: "1px solid var(--border)",
+                  }}
+                >
+                  {data.testers.length} Active QA Reporters
+                </span>
+              </div>
+            </div>
+
+            {/* Tester Performance Graph & Project Categorization */}
+            <div style={{ marginTop: 20, display: "flex", flexDirection: "column", gap: 20 }}>
+              {data.testers.length === 0 ? (
+                <div style={{ padding: 24, textAlign: "center", color: "var(--text-faint)", fontSize: 13 }}>
+                  No issues have been filed by testers yet.
+                </div>
+              ) : (
+                data.testers.map((tester) => (
+                  <div
+                    key={tester.id}
+                    style={{
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: 10,
+                      padding: "14px 16px",
+                      borderRadius: 10,
+                      background: "var(--surface-2)",
+                      border: "1px solid var(--border)",
+                    }}
+                  >
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 8, fontSize: 13 }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                        <span style={{ fontWeight: 800, color: "var(--text)", fontSize: 14 }}>
+                          {tester.name}
+                        </span>
+                        <span style={{ color: "var(--text-faint)", fontSize: 11.5, fontFamily: "monospace" }}>
+                          ({tester.email})
+                        </span>
+                      </div>
+
+                      {/* Prominent Number of Issues Raised Badge */}
+                      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                        <div
+                          style={{
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: 6,
+                            padding: "4px 12px",
+                            borderRadius: 20,
+                            background: "linear-gradient(135deg, #e11d48, #f43f5e)",
+                            color: "#ffffff",
+                            fontSize: 12.5,
+                            fontWeight: 800,
+                            boxShadow: "0 2px 6px rgba(225, 29, 72, 0.25)",
+                          }}
+                        >
+                          <Bug style={{ width: 13, height: 13 }} />
+                          <span>{tester.totalRaised} Issues Raised</span>
+                        </div>
+
+                        {/* Severity mini badges */}
+                        <div style={{ display: "flex", gap: 4 }}>
+                          {tester.bySeverity.CRITICAL > 0 && (
+                            <span style={{ padding: "2px 7px", borderRadius: 4, fontSize: 11, fontWeight: 700, background: "var(--crit-soft)", color: "var(--crit)", border: "1px solid var(--border)" }}>
+                              {tester.bySeverity.CRITICAL} Critical
+                            </span>
+                          )}
+                          {tester.bySeverity.HIGH > 0 && (
+                            <span style={{ padding: "2px 7px", borderRadius: 4, fontSize: 11, fontWeight: 700, background: "var(--warn-soft)", color: "var(--warn)", border: "1px solid var(--border)" }}>
+                              {tester.bySeverity.HIGH} High
+                            </span>
+                          )}
+                          {tester.bySeverity.MEDIUM > 0 && (
+                            <span style={{ padding: "2px 7px", borderRadius: 4, fontSize: 11, fontWeight: 700, background: "var(--surface)", color: "var(--text-dim)", border: "1px solid var(--border)" }}>
+                              {tester.bySeverity.MEDIUM} Med
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Visual Volume Bar */}
+                    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                      <div style={{ flex: 1, height: 8, background: "var(--surface)", borderRadius: 4, overflow: "hidden", border: "1px solid var(--border)" }}>
+                        <div
+                          style={{
+                            height: "100%",
+                            width: `${(tester.totalRaised / maxTesterRaised) * 100}%`,
+                            background: "linear-gradient(90deg, #f43f5e, #fb7185)",
+                            borderRadius: 4,
+                            transition: "width 0.4s ease",
+                          }}
+                        />
+                      </div>
+                      <span style={{ fontSize: 11.5, fontWeight: 700, color: "var(--text-dim)" }}>
+                        {((tester.totalRaised / data.overview.totalIssues) * 100).toFixed(0)}% of total issues
+                      </span>
+                    </div>
+
+                    {/* Issues Raised According to Project (Prominent Cards) */}
+                    <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", paddingTop: 4 }}>
+                      <span style={{ fontSize: 11.5, fontWeight: 700, color: "var(--text-dim)" }}>
+                        Raised by Project:
+                      </span>
+                      {tester.byProject.map((proj) => (
+                        <div
+                          key={proj.projectId}
+                          style={{
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: 6,
+                            padding: "4px 10px",
+                            borderRadius: 6,
+                            fontSize: 12,
+                            background: "var(--surface)",
+                            border: "1px solid var(--border)",
+                            boxShadow: "inset 0 1px 0 0 var(--border-specular), var(--shadow-xs)",
+                            color: "var(--text)",
+                          }}
+                        >
+                          <span style={{ fontWeight: 800, fontFamily: "monospace", color: "var(--info)", background: "var(--info-soft)", padding: "1px 5px", borderRadius: 4, border: "1px solid var(--border)" }}>
+                            {proj.projectKey}
+                          </span>
+                          <span style={{ color: "var(--text-dim)", fontWeight: 500 }}>{proj.projectName}:</span>
+                          <span style={{ fontWeight: 800, color: "var(--crit)" }}>{proj.count} issues raised</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+
+            {/* Tester Summary Table */}
+            {data.testers.length > 0 && (
+              <div style={{ marginTop: 20, borderTop: "1px solid var(--border)", paddingTop: 16 }}>
+                <h4 style={{ fontSize: 12.5, fontWeight: 700, color: "var(--text-dim)", textTransform: "uppercase", letterSpacing: "0.03em", marginBottom: 10 }}>
+                  Tester Bug Submissions Breakdown Table
+                </h4>
+                <div style={{ overflowX: "auto" }}>
+                  <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12, textAlign: "left" }}>
+                    <thead>
+                      <tr style={{ background: "var(--surface-2)", borderBottom: "1px solid var(--border)", color: "var(--text-faint)", fontWeight: 700, fontSize: 11, textTransform: "uppercase" }}>
+                        <th style={{ padding: "8px 12px" }}>Tester</th>
+                        <th style={{ padding: "8px 12px", textAlign: "right" }}>Issues Raised</th>
+                        <th style={{ padding: "8px 12px" }}>Projects Affected</th>
+                        <th style={{ padding: "8px 12px", textAlign: "right" }}>Critical</th>
+                        <th style={{ padding: "8px 12px", textAlign: "right" }}>High</th>
+                        <th style={{ padding: "8px 12px", textAlign: "right" }}>Resolved So Far</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {data.testers.map((t, idx) => (
+                        <tr key={t.id} style={{ borderBottom: idx === data.testers.length - 1 ? "none" : "1px solid var(--border)" }}>
+                          <td style={{ padding: "10px 12px", fontWeight: 700, color: "var(--text)" }}>
+                            {t.name}
+                          </td>
+                          <td style={{ padding: "10px 12px", textAlign: "right", fontWeight: 800, color: "var(--crit)" }}>
+                            {t.totalRaised} issues
+                          </td>
+                          <td style={{ padding: "10px 12px", color: "var(--text-dim)" }}>
+                            {t.byProject.map((p) => `${p.projectKey} (${p.count})`).join(", ")}
+                          </td>
+                          <td style={{ padding: "10px 12px", textAlign: "right", fontWeight: 700, color: t.bySeverity.CRITICAL > 0 ? "var(--crit)" : "var(--text-faint)" }}>
+                            {t.bySeverity.CRITICAL}
+                          </td>
+                          <td style={{ padding: "10px 12px", textAlign: "right", fontWeight: 700, color: t.bySeverity.HIGH > 0 ? "var(--warn)" : "var(--text-faint)" }}>
+                            {t.bySeverity.HIGH}
+                          </td>
+                          <td style={{ padding: "10px 12px", textAlign: "right", fontWeight: 700, color: "var(--ok)" }}>
+                            {t.byStatus.resolved + t.byStatus.closed} of {t.totalRaised}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* ======================================================== */}
+          {/*             PROJECT PERFORMANCE MATRIX TABLE             */}
+          {/* ======================================================== */}
+          <div
+            style={{
+              background: "var(--surface)",
+              border: "1px solid var(--border)",
+              borderRadius: 12,
+              overflow: "hidden",
+              boxShadow: "inset 0 1px 0 0 var(--border-specular), var(--shadow-xs)",
+            }}
+          >
+            <div
+              style={{
+                padding: "16px 20px",
+                borderBottom: "1px solid var(--border)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                flexWrap: "wrap",
+                gap: 12,
+              }}
+            >
+              <div>
+                <h3 style={{ fontSize: 15, fontWeight: 700, margin: 0, color: "var(--text)" }}>
+                  Project Performance Matrix
+                </h3>
+                <p style={{ margin: "2px 0 0", fontSize: 12, color: "var(--text-dim)" }}>
+                  Compare project velocity, issue volume, and export individual PDF audits.
+                </p>
+              </div>
+
+              {/* Search filter */}
+              <div style={{ position: "relative", width: 220 }}>
+                <Search
+                  style={{
+                    position: "absolute",
+                    left: 10,
+                    top: 8,
+                    width: 14,
+                    height: 14,
+                    color: "var(--text-faint)",
+                  }}
+                />
+                <input
+                  type="text"
+                  placeholder="Filter projects..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  style={{
+                    width: "100%",
+                    padding: "6px 10px 6px 30px",
+                    borderRadius: 7,
+                    border: "1px solid var(--border)",
+                    background: "var(--surface-2)",
+                    fontSize: 12,
+                    color: "var(--text)",
+                    outline: "none",
+                  }}
+                />
+              </div>
+            </div>
+
+            <div style={{ overflowX: "auto" }}>
+              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12.5, textAlign: "left" }}>
+                <thead>
+                  <tr
+                    style={{
+                      background: "var(--surface-2)",
+                      borderBottom: "1px solid var(--border)",
+                      fontSize: 11,
+                      fontWeight: 700,
+                      color: "var(--text-faint)",
+                      textTransform: "uppercase",
+                      letterSpacing: "0.03em",
+                    }}
+                  >
+                    <th style={{ padding: "10px 18px" }}>Project</th>
+                    <th style={{ padding: "10px 14px" }}>Staff</th>
+                    <th style={{ padding: "10px 14px", textAlign: "right" }}>Total</th>
+                    <th style={{ padding: "10px 14px", textAlign: "right" }}>QA Raised</th>
+                    <th style={{ padding: "10px 14px", textAlign: "right" }}>Open</th>
+                    <th style={{ padding: "10px 14px", textAlign: "right" }}>Active</th>
+                    <th style={{ padding: "10px 14px", textAlign: "right" }}>Resolved</th>
+                    <th style={{ padding: "10px 14px", textAlign: "right" }}>Avg Turnaround</th>
+                    <th style={{ padding: "10px 18px" }}>Resolution %</th>
+                    <th style={{ padding: "10px 18px", textAlign: "right" }}>PDF Audit</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredProjects.length === 0 ? (
+                    <tr>
+                      <td colSpan={10} style={{ padding: "28px", textAlign: "center", color: "var(--text-faint)" }}>
+                        No projects match search query.
+                      </td>
+                    </tr>
+                  ) : (
+                    filteredProjects.map((p, idx) => (
+                      <tr
+                        key={p.id}
+                        style={{
+                          borderBottom: idx === filteredProjects.length - 1 ? "none" : "1px solid var(--border)",
+                          cursor: "pointer",
+                          transition: "background 0.1s ease",
+                        }}
+                        onClick={() => {
+                          setSelectedProjectId(p.id);
+                          setActiveTab("project");
+                        }}
+                        onMouseEnter={(e) => (e.currentTarget.style.background = "var(--surface-hover)")}
+                        onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+                      >
+                        <td style={{ padding: "12px 18px" }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                            <span
+                              style={{
+                                padding: "2px 6px",
+                                borderRadius: 4,
+                                fontSize: 11,
+                                fontWeight: 700,
+                                fontFamily: "monospace",
+                                background: "var(--accent-soft)",
+                                color: "var(--accent)",
+                                border: "1px solid var(--border)",
+                              }}
+                            >
+                              {p.key}
+                            </span>
+                            <span style={{ fontWeight: 600, color: "var(--text)" }}>{p.name}</span>
+                          </div>
+                        </td>
+                        <td style={{ padding: "12px 14px", color: "var(--text-dim)" }}>
+                          {p.membersCount} members
+                        </td>
+                        <td style={{ padding: "12px 14px", textAlign: "right", fontWeight: 700, color: "var(--text)" }}>
+                          {p.totalIssues}
+                        </td>
+                        <td style={{ padding: "12px 14px", textAlign: "right" }}>
+                          <span
+                            style={{
+                              padding: "2px 7px",
+                              borderRadius: 4,
+                              fontSize: 11.5,
+                              fontWeight: 800,
+                              background: "var(--crit-soft)",
+                              color: "var(--crit)",
+                              border: "1px solid var(--border)",
+                            }}
+                            title={`${p.testers.reduce((acc, t) => acc + t.totalRaised, 0)} issues raised by testers`}
+                          >
+                            {p.testers.reduce((acc, t) => acc + t.totalRaised, 0)}
+                          </span>
+                        </td>
+                        <td style={{ padding: "12px 14px", textAlign: "right", fontWeight: 600, color: "var(--crit)" }}>
+                          {p.openIssues}
+                        </td>
+                        <td style={{ padding: "12px 14px", textAlign: "right", fontWeight: 600, color: "var(--info)" }}>
+                          {p.inProgressIssues}
+                        </td>
+                        <td style={{ padding: "12px 14px", textAlign: "right", fontWeight: 600, color: "var(--ok)" }}>
+                          {p.resolvedIssues + p.closedIssues}
+                        </td>
+                        <td style={{ padding: "12px 14px", textAlign: "right", fontWeight: 700, color: "var(--text)" }}>
+                          {p.avgResolutionFormatted}
+                        </td>
+                        <td style={{ padding: "12px 18px" }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                            <div
+                              style={{
+                                width: 50,
+                                height: 6,
+                                borderRadius: 4,
+                                background: "var(--surface-2)",
+                                overflow: "hidden",
+                                border: "1px solid var(--border)",
+                              }}
+                            >
+                              <div
+                                style={{
+                                  height: "100%",
+                                  width: `${p.resolutionRatePercent}%`,
+                                  background: "linear-gradient(90deg, #2563eb, #38bdf8)",
+                                  borderRadius: 4,
+                                }}
+                              />
+                            </div>
+                            <span style={{ fontWeight: 600, color: "var(--text)", fontSize: 12 }}>
+                              {p.resolutionRatePercent}%
+                            </span>
+                          </div>
+                        </td>
+                        <td style={{ padding: "12px 18px", textAlign: "right" }} onClick={(e) => e.stopPropagation()}>
+                          <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 6 }}>
+                            <button
+                              type="button"
+                              onClick={() => handleDownloadPdf(p.id)}
+                              disabled={downloadingPdf === p.id}
+                              style={{
+                                display: "inline-flex",
+                                alignItems: "center",
+                                gap: 4,
+                                padding: "4px 8px",
+                                borderRadius: 6,
+                                fontSize: 11.5,
+                                fontWeight: 600,
+                                background: "var(--surface)",
+                                color: "var(--info)",
+                                border: "1px solid var(--border)",
+                                cursor: "pointer",
+                                transition: "all 0.12s ease",
+                              }}
+                            >
+                              <Download style={{ width: 12, height: 12 }} />
+                              <span>{downloadingPdf === p.id ? "..." : "PDF"}</span>
+                            </button>
+                            <Link
+                              href={`/projects/${p.id}`}
+                              style={{
+                                display: "inline-flex",
+                                alignItems: "center",
+                                justifyContent: "center",
+                                width: 26,
+                                height: 26,
+                                borderRadius: 6,
+                                border: "1px solid var(--border)",
+                                color: "var(--text-faint)",
+                                textDecoration: "none",
+                              }}
+                              title="Go to board"
+                            >
+                              <ExternalLink style={{ width: 12, height: 12 }} />
+                            </Link>
+                          </div>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      ) : (
+        /* ========================================================== */
+        /*                  PROJECT DEEP-DIVE TAB                     */
+        /* ========================================================== */
+        <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
+          {/* Project Details Banner */}
+          <div
+            style={{
+              background: "var(--surface)",
+              border: "1px solid var(--border)",
+              borderRadius: 12,
+              padding: "18px 22px",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              flexWrap: "wrap",
+              gap: 16,
+              boxShadow: "inset 0 1px 0 0 var(--border-specular), var(--shadow-xs)",
+            }}
+          >
+            <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+              <div
+                style={{
+                  width: 44,
+                  height: 44,
+                  borderRadius: 10,
+                  background: "linear-gradient(135deg, #1d4ed8, #3b82f6)",
+                  color: "#ffffff",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  fontWeight: 800,
+                  fontSize: 16,
+                  fontFamily: "monospace",
+                  boxShadow: "0 2px 8px rgba(37, 99, 235, 0.3)",
+                }}
+              >
+                {selectedProject?.key || "PRJ"}
+              </div>
+              <div>
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <h2 style={{ fontSize: 18, fontWeight: 800, margin: 0, color: "var(--text)" }}>
+                    {selectedProject?.name}
+                  </h2>
+                  <span
+                    style={{
+                      padding: "2px 7px",
+                      borderRadius: 4,
+                      fontSize: 11,
+                      fontFamily: "monospace",
+                      fontWeight: 700,
+                      background: "var(--accent-soft)",
+                      color: "var(--accent)",
+                      border: "1px solid var(--border)",
+                    }}
+                  >
+                    {selectedProject?.key}
+                  </span>
+                </div>
+                <p style={{ margin: "3px 0 0", fontSize: 13, color: "var(--text-dim)" }}>
+                  {selectedProject?.description || "No project description provided."}
+                </p>
+              </div>
+            </div>
+
+            <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+              {/* Project selector dropdown */}
+              <select
+                value={selectedProjectId}
+                onChange={(e) => setSelectedProjectId(e.target.value)}
+                style={{
+                  padding: "7px 12px",
+                  borderRadius: 8,
+                  border: "1px solid var(--border)",
+                  background: "var(--surface-2)",
+                  fontSize: 13,
+                  fontWeight: 600,
+                  color: "var(--text)",
+                  outline: "none",
+                  cursor: "pointer",
+                }}
+              >
+                {data.projects.map((proj) => (
+                  <option key={proj.id} value={proj.id}>
+                    {proj.name} ({proj.key})
+                  </option>
+                ))}
+              </select>
+
+              {/* Download project PDF */}
+              <button
+                type="button"
+                onClick={() => handleDownloadPdf(selectedProject?.id)}
+                disabled={downloadingPdf === selectedProject?.id}
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 7,
+                  padding: "7px 14px",
+                  borderRadius: 8,
+                  fontSize: 13,
+                  fontWeight: 700,
+                  background: "linear-gradient(135deg, #1d4ed8 0%, #2563eb 50%, #38bdf8 100%)",
+                  color: "#ffffff",
+                  border: "none",
+                  boxShadow: "0 2px 8px rgba(37, 99, 235, 0.3)",
+                  cursor: "pointer",
+                }}
+              >
+                <Download style={{ width: 14, height: 14 }} />
+                <span>
+                  {downloadingPdf === selectedProject?.id
+                    ? "Generating..."
+                    : `Download ${selectedProject?.key} PDF`}
+                </span>
+              </button>
+
+              <Link
+                href={`/projects/${selectedProject?.id}`}
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 6,
+                  padding: "7px 12px",
+                  borderRadius: 8,
+                  fontSize: 13,
+                  fontWeight: 600,
+                  background: "var(--surface)",
+                  color: "var(--text)",
+                  border: "1px solid var(--border)",
+                  textDecoration: "none",
+                }}
+              >
+                <span>Open Board</span>
+                <ArrowUpRight style={{ width: 14, height: 14, color: "var(--text-faint)" }} />
+              </Link>
+            </div>
+          </div>
+
+          {/* Project KPI Cards */}
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
+              gap: 16,
+            }}
+          >
+            <div style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 12, padding: "18px 20px", boxShadow: "inset 0 1px 0 0 var(--border-specular), var(--shadow-xs)" }}>
+              <span style={{ fontSize: 11, fontWeight: 700, color: "var(--text-faint)", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                Total Issues
+              </span>
+              <div style={{ marginTop: 6, fontSize: 26, fontWeight: 800, color: "var(--text)" }}>
+                {selectedProject?.totalIssues || 0}
+              </div>
+              <div style={{ marginTop: 6, fontSize: 12, color: "var(--text-dim)" }}>
+                {selectedProject?.openIssues || 0} Open • {selectedProject?.inProgressIssues || 0} In Progress
+              </div>
+            </div>
+
+            <div style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 12, padding: "18px 20px", boxShadow: "inset 0 1px 0 0 var(--border-specular), var(--shadow-xs)" }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                <span style={{ fontSize: 11, fontWeight: 700, color: "var(--text-faint)", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                  Issues Raised by Testers
+                </span>
+                <div
+                  style={{
+                    width: 28,
+                    height: 28,
+                    borderRadius: 6,
+                    background: "var(--crit-soft)",
+                    color: "var(--crit)",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    border: "1px solid var(--border)",
+                  }}
+                >
+                  <Bug className="h-3.5 w-3.5" />
+                </div>
+              </div>
+              <div style={{ marginTop: 6, fontSize: 26, fontWeight: 800, color: "var(--crit)" }}>
+                {selectedProjectTesterRaised}
+              </div>
+              <div style={{ marginTop: 6, fontSize: 12, color: "var(--text-dim)" }}>
+                by {selectedProject?.testers.length || 0} QA testers ({selectedProject?.totalIssues ? Math.round((selectedProjectTesterRaised / selectedProject.totalIssues) * 100) : 0}% of project)
+              </div>
+            </div>
+
+            <div style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 12, padding: "18px 20px", boxShadow: "inset 0 1px 0 0 var(--border-specular), var(--shadow-xs)" }}>
+              <span style={{ fontSize: 11, fontWeight: 700, color: "var(--text-faint)", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                Staff Assigned
+              </span>
+              <div style={{ marginTop: 6, fontSize: 26, fontWeight: 800, color: "var(--text)" }}>
+                {selectedProject?.membersCount || 0}
+              </div>
+              <div style={{ marginTop: 6, fontSize: 12, color: "var(--text-dim)" }}>
+                Active project members
+              </div>
+            </div>
+
+            <div style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 12, padding: "18px 20px", boxShadow: "inset 0 1px 0 0 var(--border-specular), var(--shadow-xs)" }}>
+              <span style={{ fontSize: 11, fontWeight: 700, color: "var(--text-faint)", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                Avg Turnaround
+              </span>
+              <div style={{ marginTop: 6, fontSize: 26, fontWeight: 800, color: "var(--info)" }}>
+                {selectedProject?.avgResolutionFormatted || "N/A"}
+              </div>
+              <div style={{ marginTop: 6, fontSize: 12, color: "var(--text-dim)" }}>
+                Average time to fix/close
+              </div>
+            </div>
+
+            <div style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 12, padding: "18px 20px", boxShadow: "inset 0 1px 0 0 var(--border-specular), var(--shadow-xs)" }}>
+              <span style={{ fontSize: 11, fontWeight: 700, color: "var(--text-faint)", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                Resolution Rate
+              </span>
+              <div style={{ marginTop: 6, fontSize: 26, fontWeight: 800, color: "var(--ok)" }}>
+                {selectedProject?.resolutionRatePercent || 0}%
+              </div>
+              <div style={{ marginTop: 6, fontSize: 12, color: "var(--text-dim)" }}>
+                {(selectedProject?.resolvedIssues || 0) + (selectedProject?.closedIssues || 0)} issues resolved
+              </div>
+            </div>
+          </div>
+
+          {/* ======================================================== */}
+          {/*   PROJECT SPECIFIC: DEVELOPER RESOLUTION PERFORMANCE     */}
+          {/* ======================================================== */}
+          <div
+            style={{
+              background: "var(--surface)",
+              border: "1px solid var(--border)",
+              borderRadius: 12,
+              padding: "18px 20px",
+              boxShadow: "inset 0 1px 0 0 var(--border-specular), var(--shadow-xs)",
+            }}
+          >
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16 }}>
+              <Code2 className="h-4 w-4" style={{ color: "var(--info)" }} />
+              <h3 style={{ fontSize: 14.5, fontWeight: 700, margin: 0, color: "var(--text)" }}>
+                Developer Performance in {selectedProject?.name}
+              </h3>
+            </div>
+            {selectedProject?.developers.length === 0 ? (
+              <div style={{ padding: 16, textAlign: "center", color: "var(--text-faint)", fontSize: 12.5 }}>
+                No developers are currently assigned to issues in this project.
+              </div>
+            ) : (
+              <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+                {selectedProject?.developers.map((dev) => (
+                  <div key={dev.id} style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 12.5 }}>
+                      <span style={{ fontWeight: 700, color: "var(--text)" }}>{dev.name}</span>
+                      <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+                        <span style={{ fontWeight: 600, color: "var(--text)" }}>
+                          {dev.resolvedCount} of {dev.assignedCount} resolved
+                        </span>
+                        <span style={{ fontWeight: 700, color: "var(--ok)" }}>
+                          {dev.resolutionRate}%
+                        </span>
+                        <span style={{ color: "var(--text-faint)", fontSize: 11.5 }}>
+                          ({dev.avgResolutionFormatted} turnaround)
+                        </span>
+                      </div>
+                    </div>
+                    <div style={{ height: 7, background: "var(--surface-2)", borderRadius: 4, overflow: "hidden", border: "1px solid var(--border)" }}>
+                      <div
+                        style={{
+                          height: "100%",
+                          width: `${dev.resolutionRate}%`,
+                          background: "linear-gradient(90deg, #2563eb, #10b981)",
+                          borderRadius: 4,
+                        }}
+                      />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* ======================================================== */}
+          {/*   PROJECT SPECIFIC: ISSUES RAISED BY TESTERS             */}
+          {/* ======================================================== */}
+          <div
+            style={{
+              background: "var(--surface)",
+              border: "1px solid var(--border)",
+              borderRadius: 12,
+              padding: "20px 22px",
+              boxShadow: "inset 0 1px 0 0 var(--border-specular), var(--shadow-xs)",
+            }}
+          >
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                flexWrap: "wrap",
+                gap: 12,
+                paddingBottom: 16,
+                borderBottom: "1px solid var(--border)",
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                <div
+                  style={{
+                    width: 34,
+                    height: 34,
+                    borderRadius: 8,
+                    background: "var(--crit-soft)",
+                    color: "var(--crit)",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    border: "1px solid var(--border)",
+                  }}
+                >
+                  <Bug className="h-4 w-4" />
+                </div>
+                <div>
+                  <h3 style={{ fontSize: 15, fontWeight: 700, margin: 0, color: "var(--text)" }}>
+                    Number of Issues Raised by Testers in {selectedProject?.name}
+                  </h3>
+                  <p style={{ margin: "2px 0 0", fontSize: 12, color: "var(--text-dim)" }}>
+                    Bug reporting volume, severity distribution, and defect lifecycle by QA tester for this project.
+                  </p>
+                </div>
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <span
+                  style={{
+                    padding: "4px 10px",
+                    borderRadius: 12,
+                    fontSize: 11.5,
+                    fontWeight: 800,
+                    background: "var(--crit-soft)",
+                    color: "var(--crit)",
+                    border: "1px solid var(--border)",
+                  }}
+                >
+                  {selectedProjectTesterRaised} Issues Raised in {selectedProject?.key}
+                </span>
+                <span
+                  style={{
+                    padding: "4px 10px",
+                    borderRadius: 12,
+                    fontSize: 11,
+                    fontWeight: 700,
+                    background: "var(--surface-2)",
+                    color: "var(--text-dim)",
+                    border: "1px solid var(--border)",
+                  }}
+                >
+                  {selectedProject?.testers.length || 0} QA Reporters
+                </span>
+              </div>
+            </div>
+
+            {selectedProject?.testers.length === 0 ? (
+              <div style={{ padding: 24, textAlign: "center", color: "var(--text-faint)", fontSize: 13 }}>
+                No issues have been reported by testers in this project yet.
+              </div>
+            ) : (
+              <div style={{ marginTop: 20, display: "flex", flexDirection: "column", gap: 16 }}>
+                {selectedProject?.testers.map((tester) => (
+                  <div
+                    key={tester.id}
+                    style={{
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: 10,
+                      padding: "14px 16px",
+                      borderRadius: 10,
+                      background: "var(--surface-2)",
+                      border: "1px solid var(--border)",
+                    }}
+                  >
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 8 }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                        <span style={{ fontWeight: 800, color: "var(--text)", fontSize: 14 }}>
+                          {tester.name}
+                        </span>
+                        <span style={{ color: "var(--text-faint)", fontSize: 11.5, fontFamily: "monospace" }}>
+                          ({tester.email})
+                        </span>
+                      </div>
+
+                      {/* Prominent Number of Issues Raised Badge */}
+                      <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                        <div
+                          style={{
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: 6,
+                            padding: "4px 12px",
+                            borderRadius: 20,
+                            background: "linear-gradient(135deg, #e11d48, #f43f5e)",
+                            color: "#ffffff",
+                            fontSize: 12.5,
+                            fontWeight: 800,
+                            boxShadow: "0 2px 6px rgba(225, 29, 72, 0.25)",
+                          }}
+                        >
+                          <Bug style={{ width: 13, height: 13 }} />
+                          <span>{tester.totalRaised} Issues Raised by Tester</span>
+                        </div>
+
+                        {/* Severity badges */}
+                        {tester.bySeverity.CRITICAL > 0 && (
+                          <span style={{ padding: "2px 7px", borderRadius: 4, fontSize: 11, fontWeight: 700, background: "var(--crit-soft)", color: "var(--crit)", border: "1px solid var(--border)" }}>
+                            {tester.bySeverity.CRITICAL} Critical
+                          </span>
+                        )}
+                        {tester.bySeverity.HIGH > 0 && (
+                          <span style={{ padding: "2px 7px", borderRadius: 4, fontSize: 11, fontWeight: 700, background: "var(--warn-soft)", color: "var(--warn)", border: "1px solid var(--border)" }}>
+                            {tester.bySeverity.HIGH} High
+                          </span>
+                        )}
+                        {tester.bySeverity.MEDIUM > 0 && (
+                          <span style={{ padding: "2px 7px", borderRadius: 4, fontSize: 11, fontWeight: 700, background: "var(--surface)", color: "var(--text-dim)", border: "1px solid var(--border)" }}>
+                            {tester.bySeverity.MEDIUM} Med
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Visual Bar of Issues Raised relative to project issues */}
+                    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                      <div style={{ flex: 1, height: 8, background: "var(--surface)", borderRadius: 4, overflow: "hidden", border: "1px solid var(--border)" }}>
+                        <div
+                          style={{
+                            height: "100%",
+                            width: `${(tester.totalRaised / (selectedProject?.totalIssues || 1)) * 100}%`,
+                            background: "linear-gradient(90deg, #f43f5e, #fb7185)",
+                            borderRadius: 4,
+                            transition: "width 0.4s ease",
+                          }}
+                        />
+                      </div>
+                      <span style={{ fontSize: 11.5, fontWeight: 700, color: "var(--text-dim)" }}>
+                        {selectedProject?.totalIssues ? ((tester.totalRaised / selectedProject.totalIssues) * 100).toFixed(0) : 0}% of project tickets
+                      </span>
+                    </div>
+
+                    {/* Status lifecycle pills */}
+                    <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 11.5, color: "var(--text-dim)", flexWrap: "wrap" }}>
+                      <span style={{ fontWeight: 600 }}>Resolution Outcomes:</span>
+                      <span style={{ color: "var(--crit)", fontWeight: 700 }}>{tester.byStatus.open} Open</span>
+                      <span>•</span>
+                      <span style={{ color: "var(--info)", fontWeight: 700 }}>{tester.byStatus.inProgress} In Progress</span>
+                      <span>•</span>
+                      <span style={{ color: "var(--ok)", fontWeight: 700 }}>{tester.byStatus.resolved + tester.byStatus.closed} Resolved / Fixed</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Team Workload Table */}
+          <div
+            style={{
+              background: "var(--surface)",
+              border: "1px solid var(--border)",
+              borderRadius: 12,
+              overflow: "hidden",
+              boxShadow: "inset 0 1px 0 0 var(--border-specular), var(--shadow-xs)",
+            }}
+          >
+            <div style={{ padding: "16px 20px", borderBottom: "1px solid var(--border)" }}>
+              <h3 style={{ fontSize: 14, fontWeight: 700, margin: 0, color: "var(--text)" }}>
+                Team Staff Roster & Contributions
+              </h3>
+              <p style={{ margin: "2px 0 0", fontSize: 12, color: "var(--text-dim)" }}>
+                Role, tickets assigned, tickets resolved, and tickets reported for this project.
+              </p>
+            </div>
+            <div style={{ overflowX: "auto" }}>
+              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12.5, textAlign: "left" }}>
+                <thead>
+                  <tr
+                    style={{
+                      background: "var(--surface-2)",
+                      borderBottom: "1px solid var(--border)",
+                      fontSize: 11,
+                      fontWeight: 700,
+                      color: "var(--text-faint)",
+                      textTransform: "uppercase",
+                    }}
+                  >
+                    <th style={{ padding: "10px 18px" }}>Member</th>
+                    <th style={{ padding: "10px 14px" }}>Email</th>
+                    <th style={{ padding: "10px 14px" }}>Role In Project</th>
+                    <th style={{ padding: "10px 18px", textAlign: "right" }}>Assigned</th>
+                    <th style={{ padding: "10px 18px", textAlign: "right" }}>Resolved</th>
+                    <th style={{ padding: "10px 18px", textAlign: "right" }}>Raised</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {selectedProject?.members.length === 0 ? (
+                    <tr>
+                      <td colSpan={6} style={{ padding: "24px", textAlign: "center", color: "var(--text-faint)" }}>
+                        No members assigned to this project yet.
+                      </td>
+                    </tr>
+                  ) : (
+                    selectedProject?.members.map((m, idx) => (
+                      <tr
+                        key={m.id}
+                        style={{
+                          borderBottom: idx === selectedProject.members.length - 1 ? "none" : "1px solid var(--border)",
+                        }}
+                      >
+                        <td style={{ padding: "12px 18px", fontWeight: 600, color: "var(--text)" }}>{m.name}</td>
+                        <td style={{ padding: "12px 14px", color: "var(--text-dim)", fontFamily: "monospace", fontSize: 11.5 }}>
+                          {m.email}
+                        </td>
+                        <td style={{ padding: "12px 14px" }}>
+                          <span
+                            style={{
+                              padding: "2px 7px",
+                              borderRadius: 4,
+                              fontSize: 11,
+                              fontWeight: 700,
+                              background: "var(--surface-2)",
+                              color: "var(--text-dim)",
+                              border: "1px solid var(--border)",
+                            }}
+                          >
+                            {m.roleInProject}
+                          </span>
+                        </td>
+                        <td style={{ padding: "12px 18px", textAlign: "right", fontWeight: 600, color: "var(--text)" }}>
+                          {m.assignedIssuesCount}
+                        </td>
+                        <td style={{ padding: "12px 18px", textAlign: "right", fontWeight: 700, color: "var(--ok)" }}>
+                          {m.resolvedIssuesCount}
+                        </td>
+                        <td style={{ padding: "12px 18px", textAlign: "right", fontWeight: 700, color: "var(--info)" }}>
+                          {m.raisedIssuesCount}
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {/* Recent Issues in Project */}
+          <div
+            style={{
+              background: "var(--surface)",
+              border: "1px solid var(--border)",
+              borderRadius: 12,
+              overflow: "hidden",
+              boxShadow: "inset 0 1px 0 0 var(--border-specular), var(--shadow-xs)",
+            }}
+          >
+            <div style={{ padding: "16px 20px", borderBottom: "1px solid var(--border)" }}>
+              <h3 style={{ fontSize: 14, fontWeight: 700, margin: 0, color: "var(--text)" }}>
+                Recent Issues in {selectedProject?.name}
+              </h3>
+              <p style={{ margin: "2px 0 0", fontSize: 12, color: "var(--text-dim)" }}>
+                Latest tickets logged in this project with reporter and assignee attribution.
+              </p>
+            </div>
+            <div style={{ overflowX: "auto" }}>
+              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12.5, textAlign: "left" }}>
+                <thead>
+                  <tr
+                    style={{
+                      background: "var(--surface-2)",
+                      borderBottom: "1px solid var(--border)",
+                      fontSize: 11,
+                      fontWeight: 700,
+                      color: "var(--text-faint)",
+                      textTransform: "uppercase",
+                    }}
+                  >
+                    <th style={{ padding: "10px 18px" }}>Key</th>
+                    <th style={{ padding: "10px 14px" }}>Title</th>
+                    <th style={{ padding: "10px 14px" }}>Status</th>
+                    <th style={{ padding: "10px 14px" }}>Severity</th>
+                    <th style={{ padding: "10px 14px" }}>Reported By</th>
+                    <th style={{ padding: "10px 18px" }}>Assigned To</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {selectedProject?.recentIssues.length === 0 ? (
+                    <tr>
+                      <td colSpan={6} style={{ padding: "24px", textAlign: "center", color: "var(--text-faint)" }}>
+                        No issues created in this project yet.
+                      </td>
+                    </tr>
+                  ) : (
+                    selectedProject?.recentIssues.map((iss, idx) => (
+                      <tr
+                        key={iss.id}
+                        style={{
+                          borderBottom: idx === selectedProject.recentIssues.length - 1 ? "none" : "1px solid var(--border)",
+                        }}
+                      >
+                        <td style={{ padding: "12px 18px", fontWeight: 700, fontFamily: "monospace", color: "var(--info)" }}>
+                          {iss.key}
+                        </td>
+                        <td style={{ padding: "12px 14px", fontWeight: 500, color: "var(--text)" }}>
+                          {iss.title}
+                        </td>
+                        <td style={{ padding: "12px 14px" }}>
+                          <span
+                            style={{
+                              padding: "2px 7px",
+                              borderRadius: 4,
+                              fontSize: 11,
+                              fontWeight: 700,
+                              background: "var(--surface-2)",
+                              color: "var(--text)",
+                              border: "1px solid var(--border)",
+                            }}
+                          >
+                            {iss.status}
+                          </span>
+                        </td>
+                        <td style={{ padding: "12px 14px" }}>
+                          <span
+                            style={{
+                              padding: "2px 7px",
+                              borderRadius: 4,
+                              fontSize: 11,
+                              fontWeight: 700,
+                              background:
+                                iss.severity === "CRITICAL"
+                                  ? "var(--crit-soft)"
+                                  : iss.severity === "HIGH"
+                                  ? "var(--warn-soft)"
+                                  : "var(--surface-2)",
+                              color:
+                                iss.severity === "CRITICAL"
+                                  ? "var(--crit)"
+                                  : iss.severity === "HIGH"
+                                  ? "var(--warn)"
+                                  : "var(--text-dim)",
+                              border: "1px solid var(--border)",
+                            }}
+                          >
+                            {iss.severity}
+                          </span>
+                        </td>
+                        <td style={{ padding: "12px 14px", color: "var(--text-dim)", fontWeight: 500 }}>
+                          {iss.reporterName}
+                        </td>
+                        <td style={{ padding: "12px 18px", color: "var(--text)" }}>
+                          {iss.assigneeName || (
+                            <span style={{ color: "var(--text-faint)", fontStyle: "italic" }}>Unassigned</span>
+                          )}
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

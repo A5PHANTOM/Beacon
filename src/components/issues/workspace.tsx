@@ -1312,7 +1312,7 @@ export function IssueWorkspace({
               transition: "all 0.15s ease",
             }}
           >
-            ✓ Covered / Solved ({resolvedCount})
+            ✓ Covered / Completed ({resolvedCount})
           </button>
         </div>
       </div>

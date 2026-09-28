@@ -19,6 +19,7 @@ import {
   X,
   Layers,
   Sparkles,
+  BarChart3,
 } from "lucide-react";
 import {
   StorageUsageData,
@@ -229,6 +230,26 @@ export function UsageClient({ initialData }: { initialData: StorageUsageData }) 
           <span>Team & Users</span>
         </Link>
         <Link
+          href="/admin/statuses"
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 7,
+            padding: "7px 15px",
+            borderRadius: 8,
+            fontSize: 13,
+            fontWeight: 600,
+            textDecoration: "none",
+            background: "transparent",
+            color: "var(--text-dim)",
+            border: "1px solid transparent",
+            transition: "all 0.15s ease",
+          }}
+        >
+          <Layers className="h-4 w-4" />
+          <span>Workflow & Statuses</span>
+        </Link>
+        <Link
           href="/admin/usage"
           style={{
             display: "inline-flex",
@@ -246,6 +267,26 @@ export function UsageClient({ initialData }: { initialData: StorageUsageData }) 
         >
           <HardDrive className="h-4 w-4" />
           <span>Usage & Storage</span>
+        </Link>
+        <Link
+          href="/admin/analytics"
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 7,
+            padding: "7px 15px",
+            borderRadius: 8,
+            fontSize: 13,
+            fontWeight: 600,
+            textDecoration: "none",
+            background: "transparent",
+            color: "var(--text-dim)",
+            border: "1px solid transparent",
+            transition: "all 0.15s ease",
+          }}
+        >
+          <BarChart3 className="h-4 w-4" />
+          <span>Analytics & Reports</span>
         </Link>
       </div>
 

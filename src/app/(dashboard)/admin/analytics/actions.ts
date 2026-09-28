@@ -10,6 +10,51 @@ export type ProjectMemberWorkload = {
   roleInProject: string;
   assignedIssuesCount: number;
   resolvedIssuesCount: number;
+  raisedIssuesCount: number;
+};
+
+export type DeveloperPerformance = {
+  id: string;
+  name: string;
+  email: string;
+  assignedCount: number;
+  resolvedCount: number;
+  activeCount: number;
+  resolutionRate: number;
+  avgResolutionHours: number;
+  avgResolutionFormatted: string;
+  projects: {
+    projectId: string;
+    projectKey: string;
+    projectName: string;
+    assigned: number;
+    resolved: number;
+  }[];
+};
+
+export type TesterPerformance = {
+  id: string;
+  name: string;
+  email: string;
+  totalRaised: number;
+  byProject: {
+    projectId: string;
+    projectKey: string;
+    projectName: string;
+    count: number;
+  }[];
+  bySeverity: {
+    CRITICAL: number;
+    HIGH: number;
+    MEDIUM: number;
+    LOW: number;
+  };
+  byStatus: {
+    open: number;
+    inProgress: number;
+    resolved: number;
+    closed: number;
+  };
 };
 
 export type RecentIssueItem = {
@@ -21,6 +66,7 @@ export type RecentIssueItem = {
   severity: string;
   priority: string;
   createdAt: string;
+  reporterName: string;
   assigneeName: string | null;
 };
 
@@ -42,6 +88,8 @@ export type ProjectAnalyticsData = {
   statusBreakdown: Record<string, number>;
   severityBreakdown: Record<string, number>;
   priorityBreakdown: Record<string, number>;
+  developers: DeveloperPerformance[];
+  testers: TesterPerformance[];
   members: ProjectMemberWorkload[];
   recentIssues: RecentIssueItem[];
 };
@@ -81,6 +129,8 @@ export type SystemAnalyticsData = {
     percentage: number;
     color: string;
   }[];
+  developers: DeveloperPerformance[];
+  testers: TesterPerformance[];
   projects: ProjectAnalyticsData[];
 };
 
@@ -98,7 +148,6 @@ function formatDuration(hours: number): string {
 }
 
 export async function getSystemAnalyticsData(): Promise<SystemAnalyticsData> {
-  // 1. Fetch system users
   const [users, rawProjects, customStatuses] = await Promise.all([
     prisma.user.findMany({
       select: {
@@ -119,7 +168,8 @@ export async function getSystemAnalyticsData(): Promise<SystemAnalyticsData> {
         },
         issues: {
           include: {
-            assignee: { select: { id: true, name: true } },
+            reporter: { select: { id: true, name: true, email: true } },
+            assignee: { select: { id: true, name: true, email: true } },
             history: {
               where: { fieldChanged: "status" },
               orderBy: { changedAt: "asc" },
@@ -172,6 +222,27 @@ export async function getSystemAnalyticsData(): Promise<SystemAnalyticsData> {
   const allResolutionDurationsHours: number[] = [];
   const projectAnalyticsList: ProjectAnalyticsData[] = [];
 
+  // System-level developer and tester tracking maps
+  type DevStats = {
+    user: { id: string; name: string; email: string };
+    assigned: number;
+    resolved: number;
+    active: number;
+    resolutionHours: number[];
+    projectsMap: Record<string, { projectKey: string; projectName: string; assigned: number; resolved: number }>;
+  };
+
+  type TesterStats = {
+    user: { id: string; name: string; email: string };
+    totalRaised: number;
+    byProject: Record<string, { projectKey: string; projectName: string; count: number }>;
+    bySeverity: { CRITICAL: number; HIGH: number; MEDIUM: number; LOW: number };
+    byStatus: { open: number; inProgress: number; resolved: number; closed: number };
+  };
+
+  const systemDevMap = new Map<string, DevStats>();
+  const systemTesterMap = new Map<string, TesterStats>();
+
   for (const proj of rawProjects) {
     const projIssues = proj.issues;
     const projTotalIssues = projIssues.length;
@@ -199,18 +270,23 @@ export async function getSystemAnalyticsData(): Promise<SystemAnalyticsData> {
     const projResolutionDurationsHours: number[] = [];
     const memberAssignedCount: Record<string, number> = {};
     const memberResolvedCount: Record<string, number> = {};
+    const memberRaisedCount: Record<string, number> = {};
 
     proj.members.forEach((m) => {
       memberAssignedCount[m.userId] = 0;
       memberResolvedCount[m.userId] = 0;
+      memberRaisedCount[m.userId] = 0;
     });
+
+    const projectDevMap = new Map<string, DevStats>();
+    const projectTesterMap = new Map<string, TesterStats>();
 
     for (const issue of projIssues) {
       const st = issue.status;
       projStatusCounts[st] = (projStatusCounts[st] || 0) + 1;
       systemStatusCounts[st] = (systemStatusCounts[st] || 0) + 1;
 
-      const sev = (issue.severity || "MEDIUM").toUpperCase();
+      const sev = (issue.severity || "MEDIUM").toUpperCase() as "CRITICAL" | "HIGH" | "MEDIUM" | "LOW";
       projSeverityCounts[sev] = (projSeverityCounts[sev] || 0) + 1;
       systemSeverityCounts[sev] = (systemSeverityCounts[sev] || 0) + 1;
 
@@ -218,8 +294,108 @@ export async function getSystemAnalyticsData(): Promise<SystemAnalyticsData> {
       projPriorityCounts[prio] = (projPriorityCounts[prio] || 0) + 1;
       systemPriorityCounts[prio] = (systemPriorityCounts[prio] || 0) + 1;
 
-      if (issue.assigneeId) {
-        memberAssignedCount[issue.assigneeId] = (memberAssignedCount[issue.assigneeId] || 0) + 1;
+      // Track Tester / Reporter Activity
+      if (issue.reporter) {
+        const reporterId = issue.reporter.id;
+        memberRaisedCount[reporterId] = (memberRaisedCount[reporterId] || 0) + 1;
+
+        // System tester aggregator
+        if (!systemTesterMap.has(reporterId)) {
+          systemTesterMap.set(reporterId, {
+            user: issue.reporter,
+            totalRaised: 0,
+            byProject: {},
+            bySeverity: { CRITICAL: 0, HIGH: 0, MEDIUM: 0, LOW: 0 },
+            byStatus: { open: 0, inProgress: 0, resolved: 0, closed: 0 },
+          });
+        }
+        const sysTester = systemTesterMap.get(reporterId)!;
+        sysTester.totalRaised++;
+        if (!sysTester.byProject[proj.id]) {
+          sysTester.byProject[proj.id] = { projectKey: proj.key, projectName: proj.name, count: 0 };
+        }
+        sysTester.byProject[proj.id].count++;
+        sysTester.bySeverity[sev] = (sysTester.bySeverity[sev] || 0) + 1;
+
+        // Project tester aggregator
+        if (!projectTesterMap.has(reporterId)) {
+          projectTesterMap.set(reporterId, {
+            user: issue.reporter,
+            totalRaised: 0,
+            byProject: { [proj.id]: { projectKey: proj.key, projectName: proj.name, count: 0 } },
+            bySeverity: { CRITICAL: 0, HIGH: 0, MEDIUM: 0, LOW: 0 },
+            byStatus: { open: 0, inProgress: 0, resolved: 0, closed: 0 },
+          });
+        }
+        const pTester = projectTesterMap.get(reporterId)!;
+        pTester.totalRaised++;
+        pTester.byProject[proj.id].count++;
+        pTester.bySeverity[sev] = (pTester.bySeverity[sev] || 0) + 1;
+
+        const stUpper = st.toUpperCase();
+        if (stUpper === "CLOSED") {
+          sysTester.byStatus.closed++;
+          pTester.byStatus.closed++;
+        } else if (stUpper === "FIXED" || stUpper === "VERIFIED" || customDoneKeys.has(st)) {
+          sysTester.byStatus.resolved++;
+          pTester.byStatus.resolved++;
+        } else if (stUpper === "IN_PROGRESS") {
+          sysTester.byStatus.inProgress++;
+          pTester.byStatus.inProgress++;
+        } else {
+          sysTester.byStatus.open++;
+          pTester.byStatus.open++;
+        }
+      }
+
+      // Track Developer / Assignee Activity
+      if (issue.assignee) {
+        const assigneeId = issue.assignee.id;
+        memberAssignedCount[assigneeId] = (memberAssignedCount[assigneeId] || 0) + 1;
+
+        // System dev aggregator
+        if (!systemDevMap.has(assigneeId)) {
+          systemDevMap.set(assigneeId, {
+            user: issue.assignee,
+            assigned: 0,
+            resolved: 0,
+            active: 0,
+            resolutionHours: [],
+            projectsMap: {},
+          });
+        }
+        const sysDev = systemDevMap.get(assigneeId)!;
+        sysDev.assigned++;
+        if (!sysDev.projectsMap[proj.id]) {
+          sysDev.projectsMap[proj.id] = { projectKey: proj.key, projectName: proj.name, assigned: 0, resolved: 0 };
+        }
+        sysDev.projectsMap[proj.id].assigned++;
+
+        // Project dev aggregator
+        if (!projectDevMap.has(assigneeId)) {
+          projectDevMap.set(assigneeId, {
+            user: issue.assignee,
+            assigned: 0,
+            resolved: 0,
+            active: 0,
+            resolutionHours: [],
+            projectsMap: { [proj.id]: { projectKey: proj.key, projectName: proj.name, assigned: 0, resolved: 0 } },
+          });
+        }
+        const pDev = projectDevMap.get(assigneeId)!;
+        pDev.assigned++;
+        pDev.projectsMap[proj.id].assigned++;
+
+        const isResolved = isResolvedOrClosed(st);
+        if (isResolved) {
+          sysDev.resolved++;
+          pDev.resolved++;
+          sysDev.projectsMap[proj.id].resolved++;
+          pDev.projectsMap[proj.id].resolved++;
+        } else {
+          sysDev.active++;
+          pDev.active++;
+        }
       }
 
       const stUpper = st.toUpperCase();
@@ -233,18 +409,16 @@ export async function getSystemAnalyticsData(): Promise<SystemAnalyticsData> {
         projInProgress++;
         allInProgressIssues++;
       } else {
-        // REPORTED, TRIAGED or others
         projOpen++;
         allOpenIssues++;
       }
 
-      // Calculate resolution time if issue reached resolved or closed
+      // Turnaround duration if issue resolved
       if (isResolvedOrClosed(st)) {
         if (issue.assigneeId) {
           memberResolvedCount[issue.assigneeId] = (memberResolvedCount[issue.assigneeId] || 0) + 1;
         }
 
-        // Find earliest timestamp when it became resolved
         let resolvedAt: Date | null = null;
         for (const h of issue.history) {
           if (h.newValue && isResolvedOrClosed(h.newValue)) {
@@ -260,6 +434,11 @@ export async function getSystemAnalyticsData(): Promise<SystemAnalyticsData> {
         const durationHours = durationMs / (1000 * 60 * 60);
         projResolutionDurationsHours.push(durationHours);
         allResolutionDurationsHours.push(durationHours);
+
+        if (issue.assignee) {
+          systemDevMap.get(issue.assignee.id)?.resolutionHours.push(durationHours);
+          projectDevMap.get(issue.assignee.id)?.resolutionHours.push(durationHours);
+        }
       }
     }
 
@@ -282,6 +461,50 @@ export async function getSystemAnalyticsData(): Promise<SystemAnalyticsData> {
       roleInProject: pm.roleInProject,
       assignedIssuesCount: memberAssignedCount[pm.userId] || 0,
       resolvedIssuesCount: memberResolvedCount[pm.userId] || 0,
+      raisedIssuesCount: memberRaisedCount[pm.userId] || 0,
+    }));
+
+    // Developer performance in this project
+    const projDevelopers: DeveloperPerformance[] = Array.from(projectDevMap.values()).map((dev) => {
+      const avgH =
+        dev.resolutionHours.length > 0
+          ? dev.resolutionHours.reduce((a, b) => a + b, 0) / dev.resolutionHours.length
+          : 0;
+      const rate = dev.assigned > 0 ? Number(((dev.resolved / dev.assigned) * 100).toFixed(1)) : 0;
+      return {
+        id: dev.user.id,
+        name: dev.user.name,
+        email: dev.user.email,
+        assignedCount: dev.assigned,
+        resolvedCount: dev.resolved,
+        activeCount: dev.active,
+        resolutionRate: rate,
+        avgResolutionHours: Number(avgH.toFixed(1)),
+        avgResolutionFormatted: formatDuration(avgH),
+        projects: Object.entries(dev.projectsMap).map(([pId, info]) => ({
+          projectId: pId,
+          projectKey: info.projectKey,
+          projectName: info.projectName,
+          assigned: info.assigned,
+          resolved: info.resolved,
+        })),
+      };
+    });
+
+    // Tester performance in this project
+    const projTesters: TesterPerformance[] = Array.from(projectTesterMap.values()).map((t) => ({
+      id: t.user.id,
+      name: t.user.name,
+      email: t.user.email,
+      totalRaised: t.totalRaised,
+      byProject: Object.entries(t.byProject).map(([pId, info]) => ({
+        projectId: pId,
+        projectKey: info.projectKey,
+        projectName: info.projectName,
+        count: info.count,
+      })),
+      bySeverity: t.bySeverity,
+      byStatus: t.byStatus,
     }));
 
     // Top 5 recent issues
@@ -294,6 +517,7 @@ export async function getSystemAnalyticsData(): Promise<SystemAnalyticsData> {
       severity: iss.severity,
       priority: iss.priority,
       createdAt: iss.createdAt.toISOString(),
+      reporterName: iss.reporter?.name || "Unknown",
       assigneeName: iss.assignee?.name || null,
     }));
 
@@ -315,12 +539,56 @@ export async function getSystemAnalyticsData(): Promise<SystemAnalyticsData> {
       statusBreakdown: projStatusCounts,
       severityBreakdown: projSeverityCounts,
       priorityBreakdown: projPriorityCounts,
+      developers: projDevelopers,
+      testers: projTesters,
       members: membersWorkload,
       recentIssues,
     });
   }
 
-  // Calculate system-wide average resolution time
+  // System developers list
+  const systemDevelopers: DeveloperPerformance[] = Array.from(systemDevMap.values()).map((dev) => {
+    const avgH =
+      dev.resolutionHours.length > 0
+        ? dev.resolutionHours.reduce((a, b) => a + b, 0) / dev.resolutionHours.length
+        : 0;
+    const rate = dev.assigned > 0 ? Number(((dev.resolved / dev.assigned) * 100).toFixed(1)) : 0;
+    return {
+      id: dev.user.id,
+      name: dev.user.name,
+      email: dev.user.email,
+      assignedCount: dev.assigned,
+      resolvedCount: dev.resolved,
+      activeCount: dev.active,
+      resolutionRate: rate,
+      avgResolutionHours: Number(avgH.toFixed(1)),
+      avgResolutionFormatted: formatDuration(avgH),
+      projects: Object.entries(dev.projectsMap).map(([pId, info]) => ({
+        projectId: pId,
+        projectKey: info.projectKey,
+        projectName: info.projectName,
+        assigned: info.assigned,
+        resolved: info.resolved,
+      })),
+    };
+  });
+
+  // System testers list
+  const systemTesters: TesterPerformance[] = Array.from(systemTesterMap.values()).map((t) => ({
+    id: t.user.id,
+    name: t.user.name,
+    email: t.user.email,
+    totalRaised: t.totalRaised,
+    byProject: Object.entries(t.byProject).map(([pId, info]) => ({
+      projectId: pId,
+      projectKey: info.projectKey,
+      projectName: info.projectName,
+      count: info.count,
+    })),
+    bySeverity: t.bySeverity,
+    byStatus: t.byStatus,
+  }));
+
   const systemAvgHours =
     allResolutionDurationsHours.length > 0
       ? allResolutionDurationsHours.reduce((a, b) => a + b, 0) /
@@ -333,12 +601,10 @@ export async function getSystemAnalyticsData(): Promise<SystemAnalyticsData> {
       ? Number(((systemResolvedTotal / allIssuesCount) * 100).toFixed(1))
       : 0;
 
-  // Active projects: projects with at least 1 issue or created in the system
   const activeProjectsCount = rawProjects.filter(
     (p) => p.issues.length > 0 || p.members.length > 0
   ).length;
 
-  // Status distribution list
   const statusColors: Record<string, string> = {
     REPORTED: "#EF4444",
     TRIAGED: "#F59E0B",
@@ -357,7 +623,6 @@ export async function getSystemAnalyticsData(): Promise<SystemAnalyticsData> {
     color: statusColors[status.toUpperCase()] || "#6366F1",
   }));
 
-  // Severity distribution list
   const severityColors: Record<string, string> = {
     CRITICAL: "#DC2626",
     HIGH: "#EA580C",
@@ -375,7 +640,6 @@ export async function getSystemAnalyticsData(): Promise<SystemAnalyticsData> {
     color: severityColors[sev],
   }));
 
-  // Priority distribution list
   const priorityColors: Record<string, string> = {
     URGENT: "#E11D48",
     HIGH: "#F97316",
@@ -412,6 +676,8 @@ export async function getSystemAnalyticsData(): Promise<SystemAnalyticsData> {
     statusDistribution,
     severityDistribution,
     priorityDistribution,
+    developers: systemDevelopers,
+    testers: systemTesters,
     projects: projectAnalyticsList,
   };
 }

@@ -338,6 +338,13 @@ export function AnalyticsPdfDocument({
               </Text>
             </View>
             <View style={styles.kpiCard}>
+              <Text style={styles.kpiLabel}>QA Raised</Text>
+              <Text style={[styles.kpiValue, { color: "#DC2626" }]}>
+                {projectData.testers.reduce((acc, t) => acc + t.totalRaised, 0)}
+              </Text>
+              <Text style={styles.kpiSubtext}>{projectData.testers.length} QA reporters</Text>
+            </View>
+            <View style={styles.kpiCard}>
               <Text style={styles.kpiLabel}>Avg Resolution Time</Text>
               <Text style={styles.kpiValue}>{projectData.avgResolutionFormatted}</Text>
               <Text style={styles.kpiSubtext}>Turnaround duration</Text>
@@ -362,17 +369,24 @@ export function AnalyticsPdfDocument({
             <View style={styles.kpiCard}>
               <Text style={styles.kpiLabel}>Active Projects</Text>
               <Text style={styles.kpiValue}>{systemData.overview.activeProjects}</Text>
-              <Text style={styles.kpiSubtext}>Of {systemData.overview.totalProjects} total registered</Text>
+              <Text style={styles.kpiSubtext}>Of {systemData.overview.totalProjects} registered</Text>
             </View>
             <View style={styles.kpiCard}>
               <Text style={styles.kpiLabel}>Total Issues</Text>
               <Text style={styles.kpiValue}>{systemData.overview.totalIssues}</Text>
               <Text style={styles.kpiSubtext}>
-                {systemData.overview.openIssues} Open • {systemData.overview.inProgressIssues} In Progress
+                {systemData.overview.openIssues} Open • {systemData.overview.inProgressIssues} Active
               </Text>
             </View>
             <View style={styles.kpiCard}>
-              <Text style={styles.kpiLabel}>Avg Resolution Time</Text>
+              <Text style={styles.kpiLabel}>QA Raised</Text>
+              <Text style={[styles.kpiValue, { color: "#DC2626" }]}>
+                {systemData.testers.reduce((acc, t) => acc + t.totalRaised, 0)}
+              </Text>
+              <Text style={styles.kpiSubtext}>Across {systemData.testers.length} testers</Text>
+            </View>
+            <View style={styles.kpiCard}>
+              <Text style={styles.kpiLabel}>Avg Resolution</Text>
               <Text style={styles.kpiValue}>{systemData.overview.avgResolutionFormatted}</Text>
               <Text style={styles.kpiSubtext}>{systemData.overview.resolutionRatePercent}% Resolved Rate</Text>
             </View>
@@ -467,53 +481,98 @@ export function AnalyticsPdfDocument({
           </View>
         </View>
 
-        {/* BOTTOM SECTION: PROJECT MATRIX (IF SYSTEM) OR TEAM WORKLOAD (IF PROJECT SPECIFIC) */}
+        {/* DEVELOPER VELOCITY & TESTER BUG REPORTING TABLES */}
+        <View style={styles.sectionHeadingRow}>
+          <View style={styles.sectionHeadingIndicator} />
+          <Text style={styles.sectionHeadingTitle}>Developer Issue Resolution & Velocity</Text>
+        </View>
+        <View style={styles.table}>
+          <View style={styles.tableHeader}>
+            <Text style={[styles.tableHeaderCell, { flex: 2 }]}>Developer</Text>
+            <Text style={[styles.tableHeaderCell, { flex: 2.2 }]}>Email</Text>
+            <Text style={[styles.tableHeaderCell, { flex: 1, textAlign: "right" }]}>Assigned</Text>
+            <Text style={[styles.tableHeaderCell, { flex: 1, textAlign: "right" }]}>Resolved</Text>
+            <Text style={[styles.tableHeaderCell, { flex: 1.2, textAlign: "right" }]}>Turnaround</Text>
+            <Text style={[styles.tableHeaderCell, { flex: 1.2, textAlign: "right" }]}>Success %</Text>
+          </View>
+          {(isProjectSpecific ? projectData.developers : systemData.developers).length === 0 ? (
+            <View style={styles.tableRow}>
+              <Text style={[styles.tableCell, { flex: 1, textAlign: "center", color: "#94A3B8" }]}>
+                No developer issue assignments recorded.
+              </Text>
+            </View>
+          ) : (
+            (isProjectSpecific ? projectData.developers : systemData.developers).map((dev, idx) => (
+              <View key={dev.id} style={[styles.tableRow, idx % 2 === 1 ? styles.tableRowAlt : {}]}>
+                <Text style={[styles.tableCellBold, { flex: 2 }]}>{dev.name}</Text>
+                <Text style={[styles.tableCell, { flex: 2.2, color: "#64748B" }]}>{dev.email}</Text>
+                <Text style={[styles.tableCell, { flex: 1, textAlign: "right" }]}>{dev.assignedCount}</Text>
+                <Text style={[styles.tableCellBold, { flex: 1, textAlign: "right", color: "#16A34A" }]}>
+                  {dev.resolvedCount}
+                </Text>
+                <Text style={[styles.tableCell, { flex: 1.2, textAlign: "right" }]}>{dev.avgResolutionFormatted}</Text>
+                <Text style={[styles.tableCellBold, { flex: 1.2, textAlign: "right", color: "#2563EB" }]}>
+                  {dev.resolutionRate}%
+                </Text>
+              </View>
+            ))
+          )}
+        </View>
+
+        {/* TESTER ISSUES RAISED ACCORDING TO PROJECT TABLE */}
+        <View style={styles.sectionHeadingRow}>
+          <View style={styles.sectionHeadingIndicator} />
+          <Text style={styles.sectionHeadingTitle}>QA & Tester Bug Reporting (Number of Issues Raised by Project)</Text>
+        </View>
+        <View style={styles.table}>
+          <View style={styles.tableHeader}>
+            <Text style={[styles.tableHeaderCell, { flex: 2 }]}>Tester</Text>
+            <Text style={[styles.tableHeaderCell, { flex: 3 }]}>Issues Raised by Project</Text>
+            <Text style={[styles.tableHeaderCell, { flex: 1, textAlign: "right" }]}>Critical</Text>
+            <Text style={[styles.tableHeaderCell, { flex: 1, textAlign: "right" }]}>High</Text>
+            <Text style={[styles.tableHeaderCell, { flex: 1.4, textAlign: "right" }]}>Issues Raised</Text>
+          </View>
+          {(isProjectSpecific ? projectData.testers : systemData.testers).length === 0 ? (
+            <View style={styles.tableRow}>
+              <Text style={[styles.tableCell, { flex: 1, textAlign: "center", color: "#94A3B8" }]}>
+                No issues logged by testers recorded.
+              </Text>
+            </View>
+          ) : (
+            (isProjectSpecific ? projectData.testers : systemData.testers).map((t, idx) => (
+              <View key={t.id} style={[styles.tableRow, idx % 2 === 1 ? styles.tableRowAlt : {}]}>
+                <Text style={[styles.tableCellBold, { flex: 2 }]}>{t.name}</Text>
+                <Text style={[styles.tableCell, { flex: 3, color: "#2563EB" }]}>
+                  {t.byProject.map((p) => `${p.projectKey}: ${p.count}`).join(" • ")}
+                </Text>
+                <Text style={[styles.tableCellBold, { flex: 1, textAlign: "right", color: "#DC2626" }]}>
+                  {t.bySeverity.CRITICAL}
+                </Text>
+                <Text style={[styles.tableCell, { flex: 1, textAlign: "right", color: "#EA580C" }]}>
+                  {t.bySeverity.HIGH}
+                </Text>
+                <Text style={[styles.tableCellBold, { flex: 1.4, textAlign: "right", color: "#DC2626" }]}>
+                  {t.totalRaised} issues
+                </Text>
+              </View>
+            ))
+          )}
+        </View>
+
+        {/* BOTTOM SECTION: PROJECT MATRIX (IF SYSTEM) OR RECENT ISSUES (IF PROJECT SPECIFIC) */}
         {isProjectSpecific ? (
           <View>
-            <View style={styles.sectionHeadingRow}>
-              <View style={styles.sectionHeadingIndicator} />
-              <Text style={styles.sectionHeadingTitle}>Team Member Workload & Contributions</Text>
-            </View>
-            <View style={styles.table}>
-              <View style={styles.tableHeader}>
-                <Text style={[styles.tableHeaderCell, { flex: 2 }]}>Member</Text>
-                <Text style={[styles.tableHeaderCell, { flex: 2 }]}>Email</Text>
-                <Text style={[styles.tableHeaderCell, { flex: 1.2 }]}>Role</Text>
-                <Text style={[styles.tableHeaderCell, { flex: 1, textAlign: "right" }]}>Assigned</Text>
-                <Text style={[styles.tableHeaderCell, { flex: 1, textAlign: "right" }]}>Resolved</Text>
-              </View>
-              {projectData.members.length === 0 ? (
-                <View style={styles.tableRow}>
-                  <Text style={[styles.tableCell, { flex: 1, textAlign: "center", color: "#94A3B8" }]}>
-                    No team members assigned to this project yet.
-                  </Text>
-                </View>
-              ) : (
-                projectData.members.map((m, idx) => (
-                  <View key={m.id} style={[styles.tableRow, idx % 2 === 1 ? styles.tableRowAlt : {}]}>
-                    <Text style={[styles.tableCellBold, { flex: 2 }]}>{m.name}</Text>
-                    <Text style={[styles.tableCell, { flex: 2, color: "#64748B" }]}>{m.email}</Text>
-                    <Text style={[styles.tableCell, { flex: 1.2 }]}>{m.roleInProject}</Text>
-                    <Text style={[styles.tableCell, { flex: 1, textAlign: "right" }]}>{m.assignedIssuesCount}</Text>
-                    <Text style={[styles.tableCellBold, { flex: 1, textAlign: "right", color: "#16A34A" }]}>
-                      {m.resolvedIssuesCount}
-                    </Text>
-                  </View>
-                ))
-              )}
-            </View>
-
             {/* Recent issues */}
             <View style={styles.sectionHeadingRow}>
               <View style={styles.sectionHeadingIndicator} />
-              <Text style={styles.sectionHeadingTitle}>Recent Issues in Project</Text>
+              <Text style={styles.sectionHeadingTitle}>Recent Project Tickets</Text>
             </View>
             <View style={styles.table}>
               <View style={styles.tableHeader}>
                 <Text style={[styles.tableHeaderCell, { flex: 1 }]}>Key</Text>
-                <Text style={[styles.tableHeaderCell, { flex: 3 }]}>Title</Text>
+                <Text style={[styles.tableHeaderCell, { flex: 2.5 }]}>Title</Text>
                 <Text style={[styles.tableHeaderCell, { flex: 1.2 }]}>Status</Text>
-                <Text style={[styles.tableHeaderCell, { flex: 1 }]}>Severity</Text>
+                <Text style={[styles.tableHeaderCell, { flex: 1.5 }]}>Reporter</Text>
                 <Text style={[styles.tableHeaderCell, { flex: 1.5 }]}>Assignee</Text>
               </View>
               {projectData.recentIssues.length === 0 ? (
@@ -526,11 +585,13 @@ export function AnalyticsPdfDocument({
                 projectData.recentIssues.map((iss, idx) => (
                   <View key={iss.id} style={[styles.tableRow, idx % 2 === 1 ? styles.tableRowAlt : {}]}>
                     <Text style={[styles.tableCellBold, { flex: 1, color: "#2563EB" }]}>{iss.key}</Text>
-                    <Text style={[styles.tableCell, { flex: 3 }]}>
+                    <Text style={[styles.tableCell, { flex: 2.5 }]}>
                       {iss.title}
                     </Text>
                     <Text style={[styles.tableCell, { flex: 1.2 }]}>{iss.status}</Text>
-                    <Text style={[styles.tableCell, { flex: 1 }]}>{iss.severity}</Text>
+                    <Text style={[styles.tableCell, { flex: 1.5, color: "#64748B" }]}>
+                      {iss.reporterName}
+                    </Text>
                     <Text style={[styles.tableCell, { flex: 1.5, color: "#64748B" }]}>
                       {iss.assigneeName || "Unassigned"}
                     </Text>
@@ -548,36 +609,40 @@ export function AnalyticsPdfDocument({
             <View style={styles.table}>
               <View style={styles.tableHeader}>
                 <Text style={[styles.tableHeaderCell, { flex: 0.8 }]}>Key</Text>
-                <Text style={[styles.tableHeaderCell, { flex: 2.2 }]}>Project Name</Text>
-                <Text style={[styles.tableHeaderCell, { flex: 0.8, textAlign: "right" }]}>Staff</Text>
-                <Text style={[styles.tableHeaderCell, { flex: 0.8, textAlign: "right" }]}>Total</Text>
-                <Text style={[styles.tableHeaderCell, { flex: 0.8, textAlign: "right" }]}>Open</Text>
-                <Text style={[styles.tableHeaderCell, { flex: 0.8, textAlign: "right" }]}>Active</Text>
-                <Text style={[styles.tableHeaderCell, { flex: 0.8, textAlign: "right" }]}>Resolved</Text>
-                <Text style={[styles.tableHeaderCell, { flex: 1.2, textAlign: "right" }]}>Avg Turnaround</Text>
-                <Text style={[styles.tableHeaderCell, { flex: 1.2, textAlign: "right" }]}>Resolution %</Text>
+                <Text style={[styles.tableHeaderCell, { flex: 2.0 }]}>Project Name</Text>
+                <Text style={[styles.tableHeaderCell, { flex: 0.7, textAlign: "right" }]}>Staff</Text>
+                <Text style={[styles.tableHeaderCell, { flex: 0.7, textAlign: "right" }]}>Total</Text>
+                <Text style={[styles.tableHeaderCell, { flex: 0.9, textAlign: "right" }]}>QA Raised</Text>
+                <Text style={[styles.tableHeaderCell, { flex: 0.7, textAlign: "right" }]}>Open</Text>
+                <Text style={[styles.tableHeaderCell, { flex: 0.7, textAlign: "right" }]}>Active</Text>
+                <Text style={[styles.tableHeaderCell, { flex: 0.7, textAlign: "right" }]}>Resolved</Text>
+                <Text style={[styles.tableHeaderCell, { flex: 1.1, textAlign: "right" }]}>Turnaround</Text>
+                <Text style={[styles.tableHeaderCell, { flex: 1.1, textAlign: "right" }]}>Resolution %</Text>
               </View>
               {systemData.projects.map((p, idx) => (
                 <View key={p.id} style={[styles.tableRow, idx % 2 === 1 ? styles.tableRowAlt : {}]}>
                   <Text style={[styles.tableCellBold, { flex: 0.8, color: "#2563EB" }]}>{p.key}</Text>
-                  <Text style={[styles.tableCellBold, { flex: 2.2 }]}>
+                  <Text style={[styles.tableCellBold, { flex: 2.0 }]}>
                     {p.name}
                   </Text>
-                  <Text style={[styles.tableCell, { flex: 0.8, textAlign: "right" }]}>{p.membersCount}</Text>
-                  <Text style={[styles.tableCell, { flex: 0.8, textAlign: "right" }]}>{p.totalIssues}</Text>
-                  <Text style={[styles.tableCell, { flex: 0.8, textAlign: "right", color: "#DC2626" }]}>
+                  <Text style={[styles.tableCell, { flex: 0.7, textAlign: "right" }]}>{p.membersCount}</Text>
+                  <Text style={[styles.tableCell, { flex: 0.7, textAlign: "right" }]}>{p.totalIssues}</Text>
+                  <Text style={[styles.tableCellBold, { flex: 0.9, textAlign: "right", color: "#DC2626" }]}>
+                    {p.testers.reduce((acc, t) => acc + t.totalRaised, 0)}
+                  </Text>
+                  <Text style={[styles.tableCell, { flex: 0.7, textAlign: "right", color: "#DC2626" }]}>
                     {p.openIssues}
                   </Text>
-                  <Text style={[styles.tableCell, { flex: 0.8, textAlign: "right", color: "#2563EB" }]}>
+                  <Text style={[styles.tableCell, { flex: 0.7, textAlign: "right", color: "#2563EB" }]}>
                     {p.inProgressIssues}
                   </Text>
-                  <Text style={[styles.tableCell, { flex: 0.8, textAlign: "right", color: "#16A34A" }]}>
+                  <Text style={[styles.tableCell, { flex: 0.7, textAlign: "right", color: "#16A34A" }]}>
                     {p.resolvedIssues + p.closedIssues}
                   </Text>
-                  <Text style={[styles.tableCellBold, { flex: 1.2, textAlign: "right" }]}>
+                  <Text style={[styles.tableCellBold, { flex: 1.1, textAlign: "right" }]}>
                     {p.avgResolutionFormatted}
                   </Text>
-                  <Text style={[styles.tableCellBold, { flex: 1.2, textAlign: "right", color: "#2563EB" }]}>
+                  <Text style={[styles.tableCellBold, { flex: 1.1, textAlign: "right", color: "#2563EB" }]}>
                     {p.resolutionRatePercent}%
                   </Text>
                 </View>

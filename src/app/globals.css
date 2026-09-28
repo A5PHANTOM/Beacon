@@ -144,11 +144,11 @@ button { font-family: inherit; }
 .search-trigger {
   display: flex; align-items: center; gap: 9px; background: var(--surface-2); border: 1px solid var(--border);
   padding: 7px 10px 7px 12px; border-radius: 8px; color: var(--text-faint); font-size: 13px; cursor: pointer;
-  width: 280px; transition: border-color .15s, background .15s, transform .12s;
+  width: 280px; max-width: 100%; white-space: nowrap; transition: border-color .15s, background .15s, transform .12s;
 }
 .search-trigger:hover { border-color: var(--accent); background: var(--surface); transform: translateY(-1px); }
-.search-trigger span { flex: 1; }
-.kbd-pill { font-family: 'IBM Plex Mono', monospace; font-size: 10.5px; background: var(--surface); border: 1px solid var(--border); padding: 1px 6px; border-radius: 4px; color: var(--text-faint); }
+.search-trigger span { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.kbd-pill { font-family: 'IBM Plex Mono', monospace; font-size: 10.5px; background: var(--surface); border: 1px solid var(--border); padding: 1px 6px; border-radius: 4px; color: var(--text-faint); flex-shrink: 0; }
 .top-actions { display: flex; align-items: center; gap: 8px; }
 .icon-btn { width: 32px; height: 32px; border-radius: 8px; border: none; background: none; color: var(--text-dim); display: flex; align-items: center; justify-content: center; cursor: pointer; position: relative; transition: background .12s, color .12s, transform .1s; }
 .icon-btn:hover { background: var(--surface-hover); color: var(--text); transform: scale(1.06); }
