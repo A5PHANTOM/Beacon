@@ -437,23 +437,23 @@ export function AnalyticsPdfDocument({
           <View style={styles.col}>
             <View style={styles.sectionHeadingRow}>
               <View style={styles.sectionHeadingIndicator} />
-              <Text style={styles.sectionHeadingTitle}>Severity & Risk Profile</Text>
+              <Text style={styles.sectionHeadingTitle}>Domain & Category Breakdown</Text>
             </View>
             <View style={styles.table}>
               <View style={styles.tableHeader}>
-                <Text style={[styles.tableHeaderCell, { flex: 2 }]}>Severity</Text>
+                <Text style={[styles.tableHeaderCell, { flex: 2 }]}>Domain (UI / Backend / AI)</Text>
                 <Text style={[styles.tableHeaderCell, { flex: 1, textAlign: "right" }]}>Count</Text>
                 <Text style={[styles.tableHeaderCell, { flex: 1.5, textAlign: "right" }]}>Distribution</Text>
               </View>
               {(isProjectSpecific
-                ? ["CRITICAL", "HIGH", "MEDIUM", "LOW"].map((sev) => {
+                ? ["UI", "BACKEND", "AI"].map((sev) => {
                     const count = projectData.severityBreakdown[sev] || 0;
                     const total = projectData.totalIssues || 1;
                     return {
-                      severity: sev,
+                      severity: sev === "BACKEND" ? "Backend" : sev,
                       count,
                       percentage: Number(((count / total) * 100).toFixed(1)),
-                      color: sev === "CRITICAL" ? "#DC2626" : sev === "HIGH" ? "#EA580C" : sev === "MEDIUM" ? "#F59E0B" : "#10B981",
+                      color: sev === "UI" ? "#8B5CF6" : sev === "BACKEND" ? "#10B981" : sev === "AI" ? "#EC4899" : "#64748B",
                     };
                   })
                 : systemData.severityDistribution

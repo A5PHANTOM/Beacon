@@ -21,7 +21,7 @@ const createIssueSchema = z.object({
   expected: z.string().trim().optional(),
   actual: z.string().trim().optional(),
   environment: z.string().trim().optional(),
-  severity: z.enum(["LOW", "MEDIUM", "HIGH", "CRITICAL"]).default("MEDIUM"),
+  severity: z.enum(["UI", "BACKEND", "AI", "LOW", "MEDIUM", "HIGH", "CRITICAL"]).default("UI"),
   priority: z.enum(["LOW", "MEDIUM", "HIGH", "URGENT"]).default("MEDIUM"),
   assigneeId: z.string().min(1, "Assigning a developer is mandatory"),
   image: imageItemSchema.optional(),

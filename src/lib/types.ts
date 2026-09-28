@@ -22,7 +22,7 @@ export type IssueStatus =
   | "VERIFIED"
   | "REJECTED";
 
-export type Severity = "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
+export type Severity = "UI" | "BACKEND" | "AI" | "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
 
 export type Priority = "LOW" | "MEDIUM" | "HIGH" | "URGENT";
 

@@ -835,13 +835,13 @@ export function AnalyticsClient({
             >
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                  <Flame className="h-4 w-4" style={{ color: "var(--crit)" }} />
+                  <Flame className="h-4 w-4" style={{ color: "#8B5CF6" }} />
                   <h3 style={{ fontSize: 14.5, fontWeight: 700, margin: 0, color: "var(--text)" }}>
-                    Severity & Defect Risk Profile
+                    Domain & Category Profile
                   </h3>
                 </div>
                 <span style={{ fontSize: 11.5, color: "var(--text-faint)", fontWeight: 600 }}>
-                  Workspace Impact
+                  UI • Backend • AI
                 </span>
               </div>
 
@@ -2171,26 +2171,34 @@ export function AnalyticsClient({
                         <td style={{ padding: "12px 14px" }}>
                           <span
                             style={{
-                              padding: "2px 7px",
+                              padding: "2px 8px",
                               borderRadius: 4,
                               fontSize: 11,
                               fontWeight: 700,
                               background:
-                                iss.severity === "CRITICAL"
+                                iss.severity === "UI"
+                                  ? "rgba(139, 92, 246, 0.12)"
+                                  : iss.severity === "BACKEND"
+                                  ? "rgba(16, 185, 129, 0.12)"
+                                  : iss.severity === "AI"
+                                  ? "rgba(236, 72, 153, 0.12)"
+                                  : iss.severity === "CRITICAL"
                                   ? "var(--crit-soft)"
-                                  : iss.severity === "HIGH"
-                                  ? "var(--warn-soft)"
                                   : "var(--surface-2)",
                               color:
-                                iss.severity === "CRITICAL"
+                                iss.severity === "UI"
+                                  ? "#8B5CF6"
+                                  : iss.severity === "BACKEND"
+                                  ? "#10B981"
+                                  : iss.severity === "AI"
+                                  ? "#EC4899"
+                                  : iss.severity === "CRITICAL"
                                   ? "var(--crit)"
-                                  : iss.severity === "HIGH"
-                                  ? "var(--warn)"
                                   : "var(--text-dim)",
                               border: "1px solid var(--border)",
                             }}
                           >
-                            {iss.severity}
+                            {iss.severity === "BACKEND" ? "Backend" : iss.severity}
                           </span>
                         </td>
                         <td style={{ padding: "12px 14px", color: "var(--text-dim)", fontWeight: 500 }}>

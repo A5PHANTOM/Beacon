@@ -43,7 +43,10 @@ export type TesterPerformance = {
     projectName: string;
     count: number;
   }[];
-  bySeverity: {
+  bySeverity: Record<string, number> & {
+    UI: number;
+    BACKEND: number;
+    AI: number;
     CRITICAL: number;
     HIGH: number;
     MEDIUM: number;
@@ -207,10 +210,9 @@ export async function getSystemAnalyticsData(): Promise<SystemAnalyticsData> {
 
   const systemStatusCounts: Record<string, number> = {};
   const systemSeverityCounts: Record<string, number> = {
-    CRITICAL: 0,
-    HIGH: 0,
-    MEDIUM: 0,
-    LOW: 0,
+    UI: 0,
+    BACKEND: 0,
+    AI: 0,
   };
   const systemPriorityCounts: Record<string, number> = {
     URGENT: 0,
@@ -236,7 +238,15 @@ export async function getSystemAnalyticsData(): Promise<SystemAnalyticsData> {
     user: { id: string; name: string; email: string };
     totalRaised: number;
     byProject: Record<string, { projectKey: string; projectName: string; count: number }>;
-    bySeverity: { CRITICAL: number; HIGH: number; MEDIUM: number; LOW: number };
+    bySeverity: Record<string, number> & {
+      UI: number;
+      BACKEND: number;
+      AI: number;
+      CRITICAL: number;
+      HIGH: number;
+      MEDIUM: number;
+      LOW: number;
+    };
     byStatus: { open: number; inProgress: number; resolved: number; closed: number };
   };
 
@@ -255,10 +265,9 @@ export async function getSystemAnalyticsData(): Promise<SystemAnalyticsData> {
 
     const projStatusCounts: Record<string, number> = {};
     const projSeverityCounts: Record<string, number> = {
-      CRITICAL: 0,
-      HIGH: 0,
-      MEDIUM: 0,
-      LOW: 0,
+      UI: 0,
+      BACKEND: 0,
+      AI: 0,
     };
     const projPriorityCounts: Record<string, number> = {
       URGENT: 0,
@@ -286,7 +295,8 @@ export async function getSystemAnalyticsData(): Promise<SystemAnalyticsData> {
       projStatusCounts[st] = (projStatusCounts[st] || 0) + 1;
       systemStatusCounts[st] = (systemStatusCounts[st] || 0) + 1;
 
-      const sev = (issue.severity || "MEDIUM").toUpperCase() as "CRITICAL" | "HIGH" | "MEDIUM" | "LOW";
+      const rawSev = (issue.severity || "UI").toUpperCase();
+      const sev = rawSev === "BACKED" || rawSev === "BACKEND" ? "BACKEND" : rawSev === "AI" ? "AI" : rawSev === "UI" ? "UI" : rawSev;
       projSeverityCounts[sev] = (projSeverityCounts[sev] || 0) + 1;
       systemSeverityCounts[sev] = (systemSeverityCounts[sev] || 0) + 1;
 
@@ -305,7 +315,7 @@ export async function getSystemAnalyticsData(): Promise<SystemAnalyticsData> {
             user: issue.reporter,
             totalRaised: 0,
             byProject: {},
-            bySeverity: { CRITICAL: 0, HIGH: 0, MEDIUM: 0, LOW: 0 },
+            bySeverity: { UI: 0, BACKEND: 0, AI: 0, CRITICAL: 0, HIGH: 0, MEDIUM: 0, LOW: 0 },
             byStatus: { open: 0, inProgress: 0, resolved: 0, closed: 0 },
           });
         }
@@ -323,7 +333,7 @@ export async function getSystemAnalyticsData(): Promise<SystemAnalyticsData> {
             user: issue.reporter,
             totalRaised: 0,
             byProject: { [proj.id]: { projectKey: proj.key, projectName: proj.name, count: 0 } },
-            bySeverity: { CRITICAL: 0, HIGH: 0, MEDIUM: 0, LOW: 0 },
+            bySeverity: { UI: 0, BACKEND: 0, AI: 0, CRITICAL: 0, HIGH: 0, MEDIUM: 0, LOW: 0 },
             byStatus: { open: 0, inProgress: 0, resolved: 0, closed: 0 },
           });
         }
@@ -624,20 +634,27 @@ export async function getSystemAnalyticsData(): Promise<SystemAnalyticsData> {
   }));
 
   const severityColors: Record<string, string> = {
+    UI: "#8B5CF6",
+    BACKEND: "#10B981",
+    AI: "#EC4899",
     CRITICAL: "#DC2626",
     HIGH: "#EA580C",
     MEDIUM: "#F59E0B",
     LOW: "#10B981",
   };
 
-  const severityDistribution = ["CRITICAL", "HIGH", "MEDIUM", "LOW"].map((sev) => ({
-    severity: sev,
+  const domainList = ["UI", "BACKEND", "AI"];
+  const otherActiveDomains = Object.keys(systemSeverityCounts).filter(
+    (k) => !domainList.includes(k) && systemSeverityCounts[k] > 0
+  );
+  const severityDistribution = [...domainList, ...otherActiveDomains].map((sev) => ({
+    severity: sev === "BACKEND" ? "Backend" : sev,
     count: systemSeverityCounts[sev] || 0,
     percentage:
       allIssuesCount > 0
         ? Number((((systemSeverityCounts[sev] || 0) / allIssuesCount) * 100).toFixed(1))
         : 0,
-    color: severityColors[sev],
+    color: severityColors[sev] || "#6366F1",
   }));
 
   const priorityColors: Record<string, string> = {

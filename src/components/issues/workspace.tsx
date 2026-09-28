@@ -27,7 +27,7 @@ export type WorkspaceIssue = {
   actual: string | null;
   environment: string | null;
   status: IssueStatus | string;
-  severity: "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
+  severity: "UI" | "BACKEND" | "AI" | "LOW" | "MEDIUM" | "HIGH" | "CRITICAL" | string;
   priority: "LOW" | "MEDIUM" | "HIGH" | "URGENT";
   assigneeId: string | null;
   assigneeName: string;
@@ -202,6 +202,7 @@ export function IssueWorkspace({
   // Drawer and footer custom dropdowns
   const [drawerStatusOpen, setDrawerStatusOpen] = useState(false);
   const [drawerPriOpen, setDrawerPriOpen] = useState(false);
+  const [drawerSevOpen, setDrawerSevOpen] = useState(false);
   const [drawerAssigneeOpen, setDrawerAssigneeOpen] = useState(false);
   const [footerStatusOpen, setFooterStatusOpen] = useState(false);
   const [footerAssignOpen, setFooterAssignOpen] = useState(false);
@@ -223,7 +224,7 @@ export function IssueWorkspace({
   const [newExpected, setNewExpected] = useState("");
   const [newActual, setNewActual] = useState("");
   const [newEnv, setNewEnv] = useState("");
-  const [newSev, setNewSev] = useState<"LOW" | "MEDIUM" | "HIGH" | "CRITICAL">("MEDIUM");
+  const [newSev, setNewSev] = useState<string>("UI");
   const [newPri, setNewPri] = useState<"LOW" | "MEDIUM" | "HIGH" | "URGENT">("MEDIUM");
   const [newAssigneeId, setNewAssigneeId] = useState("");
   const [createLoading, setCreateLoading] = useState(false);
@@ -421,6 +422,25 @@ export function IssueWorkspace({
     }
   }
 
+  // Helper for domain color
+  function getDomainColor(sev?: string | null) {
+    const s = (sev || "UI").toUpperCase();
+    if (s === "UI") return "#8B5CF6";
+    if (s === "BACKEND" || s === "BACKED") return "#10B981";
+    if (s === "AI") return "#EC4899";
+    if (s === "CRITICAL") return "#DC2626";
+    if (s === "HIGH") return "#EA580C";
+    if (s === "MEDIUM") return "#F59E0B";
+    return "#64748B";
+  }
+
+  // Helper for domain label
+  function getDomainLabel(sev?: string | null) {
+    const s = (sev || "UI").toUpperCase();
+    if (s === "BACKEND" || s === "BACKED") return "Backend";
+    return s;
+  }
+
   // Helper for priority color class
   function getPriClass(priority: string) {
     if (priority === "URGENT" || priority === "HIGH") return "crit";
@@ -510,7 +530,10 @@ export function IssueWorkspace({
   // Filter visible issues
   const visibleIssues = useMemo(() => {
     return issues.filter((issue) => {
-      const matchesSeverity = filterSeverity === "ALL" || issue.severity === filterSeverity;
+      const matchesSeverity =
+        filterSeverity === "ALL" ||
+        issue.severity === filterSeverity ||
+        (filterSeverity === "BACKEND" && issue.severity === "BACKED");
       const matchesAssignee =
         filterAssignee === "ALL" ||
         (filterAssignee === "UNASSIGNED" ? !issue.assigneeId : issue.assigneeId === filterAssignee);
@@ -812,7 +835,7 @@ export function IssueWorkspace({
       expected: newExpected.trim() || undefined,
       actual: newActual.trim() || undefined,
       environment: newEnv.trim() || undefined,
-      severity: newSev,
+      severity: newSev as any,
       priority: newPri,
       assigneeId: newAssigneeId,
       images: newImages.map(({ filename, fileUrl, size }) => ({ filename, fileUrl, size })),
@@ -959,6 +982,27 @@ export function IssueWorkspace({
         if (r.success && r.data) setAuditHistory(r.data.history);
       });
       showToast(`Priority set to ${newPriVal}`);
+      router.refresh();
+    }
+  }
+
+  async function handleUpdateSeverity(newSevVal: string) {
+    if (!selected) return;
+    const res = await updateIssueDetailsAction(selected.id, {
+      severity: newSevVal,
+    });
+
+    if (!res.success) {
+      showToast(res.error || "Failed to update category");
+    } else {
+      setSelected((prev) => (prev ? { ...prev, severity: newSevVal } : null));
+      setIssues((prev) =>
+        prev.map((i) => (i.id === selected.id ? { ...i, severity: newSevVal } : i))
+      );
+      getIssueAuditHistoryAction(selected.id).then((r) => {
+        if (r.success && r.data) setAuditHistory(r.data.history);
+      });
+      showToast(`Category set to ${newSevVal === "BACKEND" ? "Backend" : newSevVal}`);
       router.refresh();
     }
   }
@@ -1329,17 +1373,16 @@ export function IssueWorkspace({
 
       {/* BOARD TOOLBAR */}
       <div className="board-toolbar" id="boardAnchor">
-        {/* Severity Filter */}
+        {/* Domain / Category Filter (UI, Backend, AI) */}
         <div className="filter-chip">
           <select
             value={filterSeverity}
             onChange={(e) => setFilterSeverity(e.target.value)}
           >
-            <option value="ALL">All severities</option>
-            <option value="CRITICAL">Critical</option>
-            <option value="HIGH">High</option>
-            <option value="MEDIUM">Medium</option>
-            <option value="LOW">Low</option>
+            <option value="ALL">All Categories (UI / Backend / AI)</option>
+            <option value="UI">UI</option>
+            <option value="BACKEND">Backend</option>
+            <option value="AI">AI</option>
           </select>
           <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
             <path d="M6 9l6 6 6-6" />
@@ -1855,8 +1898,17 @@ export function IssueWorkspace({
                   >
                     {selected.priority}
                   </span>
-                  <span className="attn-tag" style={{ margin: 0 }}>
-                    {selected.severity.toLowerCase()}
+                  <span
+                    className="attn-tag"
+                    style={{
+                      margin: 0,
+                      background: `${getDomainColor(selected.severity)}1a`,
+                      color: getDomainColor(selected.severity),
+                      border: `1px solid ${getDomainColor(selected.severity)}40`,
+                      fontWeight: 700,
+                    }}
+                  >
+                    {getDomainLabel(selected.severity)}
                   </span>
                   <span className="attn-tag" style={{ margin: 0 }}>
                     {selected.environment || project.key.toLowerCase()}
@@ -2372,6 +2424,46 @@ export function IssueWorkspace({
                   )}
                 </div>
 
+                {/* Domain / Category Dropdown (UI, Backend, AI) */}
+                <div className={`meta-item ${drawerSevOpen ? "open" : ""}`} id="domainDD" onClick={(e) => e.stopPropagation()}>
+                  <div className="ml">Category / Domain</div>
+                  <div
+                    className="meta-select"
+                    style={{
+                      width: "100%",
+                      justifyContent: "space-between",
+                      color: getDomainColor(selected.severity),
+                      fontWeight: 700,
+                    }}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setDrawerSevOpen(!drawerSevOpen);
+                      setDrawerStatusOpen(false);
+                      setDrawerPriOpen(false);
+                      setDrawerAssigneeOpen(false);
+                    }}
+                  >
+                    <span id="domainLabel">{getDomainLabel(selected.severity)}</span>
+                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                      <path d="M6 9l6 6 6-6" />
+                    </svg>
+                  </div>
+
+                  {drawerSevOpen && (
+                    <div className="dd-menu" style={{ width: "100%" }}>
+                      <div className="dd-item" style={{ color: "#8B5CF6", fontWeight: 600 }} onClick={() => { setDrawerSevOpen(false); handleUpdateSeverity("UI"); }}>
+                        UI
+                      </div>
+                      <div className="dd-item" style={{ color: "#10B981", fontWeight: 600 }} onClick={() => { setDrawerSevOpen(false); handleUpdateSeverity("BACKEND"); }}>
+                        Backend
+                      </div>
+                      <div className="dd-item" style={{ color: "#EC4899", fontWeight: 600 }} onClick={() => { setDrawerSevOpen(false); handleUpdateSeverity("AI"); }}>
+                        AI
+                      </div>
+                    </div>
+                  )}
+                </div>
+
                 {/* Assignee Dropdown */}
                 <div className={`meta-item ${drawerAssigneeOpen ? "open" : ""}`} id="assigneeDD" onClick={(e) => e.stopPropagation()}>
                   <div className="ml">Assignee (Developer)</div>
@@ -2468,7 +2560,17 @@ export function IssueWorkspace({
                   <div className="ml">Tags</div>
                   <div className="tags-row">
                     <span className="attn-tag">{selected.environment || project.key.toLowerCase()}</span>
-                    <span className="attn-tag">{selected.severity.toLowerCase()}</span>
+                    <span
+                      className="attn-tag"
+                      style={{
+                        background: `${getDomainColor(selected.severity)}1a`,
+                        color: getDomainColor(selected.severity),
+                        border: `1px solid ${getDomainColor(selected.severity)}40`,
+                        fontWeight: 700,
+                      }}
+                    >
+                      {getDomainLabel(selected.severity)}
+                    </span>
                   </div>
                 </div>
               </div>
@@ -2739,17 +2841,16 @@ export function IssueWorkspace({
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10 }}>
                 <div>
                   <label style={{ display: "block", fontSize: 11, fontWeight: 700, color: "var(--text-dim)", textTransform: "uppercase", marginBottom: 4 }}>
-                    Severity
+                    Category *
                   </label>
                   <select
                     value={newSev}
-                    onChange={(e) => setNewSev(e.target.value as any)}
-                    style={{ width: "100%", background: "var(--surface-2)", border: "1px solid var(--border)", borderRadius: 8, padding: "8px 10px", fontSize: 12, color: "var(--text)", outline: "none" }}
+                    onChange={(e) => setNewSev(e.target.value)}
+                    style={{ width: "100%", background: "var(--surface-2)", border: "1px solid var(--border)", borderRadius: 8, padding: "8px 10px", fontSize: 12, color: "var(--text)", outline: "none", fontWeight: 600 }}
                   >
-                    <option value="CRITICAL">Critical</option>
-                    <option value="HIGH">High</option>
-                    <option value="MEDIUM">Medium</option>
-                    <option value="LOW">Low</option>
+                    <option value="UI">UI</option>
+                    <option value="BACKEND">Backend</option>
+                    <option value="AI">AI</option>
                   </select>
                 </div>
 
