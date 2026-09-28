@@ -135,6 +135,12 @@ const columnDefs: {
     dotColor: "#EF4444",
     emptyPrompt: "No invalid issues",
   },
+  {
+    status: "REJECTED",
+    name: "Rejected",
+    dotColor: "#DC2626",
+    emptyPrompt: "No rejected issues",
+  },
 ];
 
 export function IssueWorkspace({
@@ -357,6 +363,7 @@ export function IssueWorkspace({
       "PROD_DEPLOYED",
       "CLOSED",
       "INVALID",
+      "REJECTED",
     ];
 
     const customKeys = customStatuses.map((cs) => cs.key);
@@ -367,7 +374,6 @@ export function IssueWorkspace({
       if (issue.status === "REPORTED" && target === "OPEN") return false;
       if (issue.status === "IN_PROGRESS" && target === "DEV_IN_PROGRESS") return false;
       if (issue.status === "FIXED" && target === "DEV_COMPLETED") return false;
-      if (issue.status === "REJECTED" && target === "INVALID") return false;
       return true;
     });
   }
@@ -405,8 +411,9 @@ export function IssueWorkspace({
       case "CLOSED":
         return "Closed";
       case "INVALID":
-      case "REJECTED":
         return "Invalid";
+      case "REJECTED":
+        return "Rejected";
       case "FIXED":
         return "Dev Completed";
       default:
@@ -455,8 +462,9 @@ export function IssueWorkspace({
       case "CLOSED":
         return "#64748B";
       case "INVALID":
-      case "REJECTED":
         return "#EF4444";
+      case "REJECTED":
+        return "#DC2626";
       default:
         return "#8A93A6";
     }
@@ -517,7 +525,9 @@ export function IssueWorkspace({
           : filterStatus === "QA_DEPLOYED"
           ? ["QA_DEPLOYED", "VERIFIED"].includes(issue.status)
           : filterStatus === "INVALID"
-          ? ["INVALID", "REJECTED"].includes(issue.status)
+          ? ["INVALID"].includes(issue.status)
+          : filterStatus === "REJECTED"
+          ? ["REJECTED"].includes(issue.status)
           : filterStatus === "RESOLVED"
           ? ["FIXED", "DEV_COMPLETED", "DEV_DEPLOYED", "QA_DEPLOYED", "READY_FOR_RELEASE", "PROD_DEPLOYED", "VERIFIED", "CLOSED"].includes(issue.status)
           : issue.status === filterStatus);
@@ -1375,6 +1385,7 @@ export function IssueWorkspace({
               <option value="PROD_DEPLOYED">Prod Deployed</option>
               <option value="CLOSED">Closed</option>
               <option value="INVALID">Invalid</option>
+              <option value="REJECTED">Rejected</option>
             </optgroup>
             {customStatuses.length > 0 && (
               <optgroup label="Custom Statuses">

@@ -75,9 +75,13 @@ export default async function ProjectsPage() {
         i.status === "CLOSED"
     ).length;
 
+    const rejectedCount = p.issues.filter(
+      (i) => i.status === "REJECTED" || i.status === "INVALID"
+    ).length;
+
     const openIssuesCount = Math.max(
       0,
-      p._count.issues - (devCompletedCount + devDeployedCount)
+      p._count.issues - (devCompletedCount + devDeployedCount + rejectedCount)
     );
 
     return {
@@ -94,6 +98,7 @@ export default async function ProjectsPage() {
       openIssuesCount,
       devCompletedCount,
       devDeployedCount,
+      rejectedCount,
       members: p.members.map((m) => ({
         userId: m.userId,
         userName: m.user.name,

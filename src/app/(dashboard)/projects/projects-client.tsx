@@ -39,6 +39,7 @@ type ProjectData = {
   openIssuesCount: number;
   devCompletedCount?: number;
   devDeployedCount?: number;
+  rejectedCount?: number;
   members: {
     userId: string;
     userName: string;
@@ -248,9 +249,10 @@ export function ProjectsClient({
           const testers = project.members.filter((m) => m.roleInProject === "QA");
           const devCompletedCount = project.devCompletedCount ?? 0;
           const devDeployedCount = project.devDeployedCount ?? 0;
+          const rejectedCount = project.rejectedCount ?? 0;
           const activeOpenCount =
             project.openIssuesCount ??
-            Math.max(0, project._count.issues - (devCompletedCount + devDeployedCount));
+            Math.max(0, project._count.issues - (devCompletedCount + devDeployedCount + rejectedCount));
           const devCompletedRate =
             project._count.issues > 0
               ? Math.round((devCompletedCount / project._count.issues) * 100)
@@ -258,6 +260,10 @@ export function ProjectsClient({
           const devDeployedRate =
             project._count.issues > 0
               ? Math.round((devDeployedCount / project._count.issues) * 100)
+              : 0;
+          const rejectedRate =
+            project._count.issues > 0
+              ? Math.round((rejectedCount / project._count.issues) * 100)
               : 0;
 
           return (
@@ -439,37 +445,45 @@ export function ProjectsClient({
                     </div>
                   </div>
 
-                  <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 6, marginBottom: 10, textAlign: "center" }}>
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 4, marginBottom: 10, textAlign: "center" }}>
                     <div>
-                      <span className="mono" style={{ fontSize: 13.5, fontWeight: 700, color: "var(--text)" }}>
+                      <span className="mono" style={{ fontSize: 13, fontWeight: 700, color: "var(--text)" }}>
                         {project._count.issues}
                       </span>
-                      <span style={{ fontSize: 9.5, color: "var(--text-faint)", display: "block", textTransform: "uppercase", marginTop: 2 }}>
+                      <span style={{ fontSize: 9, color: "var(--text-faint)", display: "block", textTransform: "uppercase", marginTop: 2 }}>
                         Total
                       </span>
                     </div>
                     <div>
-                      <span className="mono" style={{ fontSize: 13.5, fontWeight: 700, color: "var(--info)" }}>
+                      <span className="mono" style={{ fontSize: 13, fontWeight: 700, color: "var(--info)" }}>
                         {devCompletedCount}
                       </span>
-                      <span style={{ fontSize: 9.5, color: "var(--info)", display: "block", textTransform: "uppercase", marginTop: 2, fontWeight: 600 }}>
+                      <span style={{ fontSize: 9, color: "var(--info)", display: "block", textTransform: "uppercase", marginTop: 2, fontWeight: 600 }}>
                         Dev Completed
                       </span>
                     </div>
                     <div>
-                      <span className="mono" style={{ fontSize: 13.5, fontWeight: 700, color: "var(--ok)" }}>
+                      <span className="mono" style={{ fontSize: 13, fontWeight: 700, color: "var(--ok)" }}>
                         {devDeployedCount}
                       </span>
-                      <span style={{ fontSize: 9.5, color: "var(--ok)", display: "block", textTransform: "uppercase", marginTop: 2, fontWeight: 600 }}>
+                      <span style={{ fontSize: 9, color: "var(--ok)", display: "block", textTransform: "uppercase", marginTop: 2, fontWeight: 600 }}>
                         Dev Deployed
                       </span>
                     </div>
                     <div>
-                      <span className="mono" style={{ fontSize: 13.5, fontWeight: 700, color: "var(--warn)" }}>
+                      <span className="mono" style={{ fontSize: 13, fontWeight: 700, color: "var(--warn)" }}>
                         {activeOpenCount}
                       </span>
-                      <span style={{ fontSize: 9.5, color: "var(--warn)", display: "block", textTransform: "uppercase", marginTop: 2, fontWeight: 600 }}>
+                      <span style={{ fontSize: 9, color: "var(--warn)", display: "block", textTransform: "uppercase", marginTop: 2, fontWeight: 600 }}>
                         Active Open
+                      </span>
+                    </div>
+                    <div>
+                      <span className="mono" style={{ fontSize: 13, fontWeight: 700, color: "var(--crit)" }}>
+                        {rejectedCount}
+                      </span>
+                      <span style={{ fontSize: 9, color: "var(--crit)", display: "block", textTransform: "uppercase", marginTop: 2, fontWeight: 600 }}>
+                        Rejected
                       </span>
                     </div>
                   </div>
@@ -499,6 +513,14 @@ export function ProjectsClient({
                           style={{
                             width: `${(activeOpenCount / project._count.issues) * 100}%`,
                             background: "var(--warn)",
+                            transition: "width .3s",
+                          }}
+                        />
+                        <div
+                          title={`Rejected: ${rejectedCount} (${rejectedRate}%)`}
+                          style={{
+                            width: `${(rejectedCount / project._count.issues) * 100}%`,
+                            background: "var(--crit)",
                             transition: "width .3s",
                           }}
                         />

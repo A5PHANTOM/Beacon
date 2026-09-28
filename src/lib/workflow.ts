@@ -52,6 +52,7 @@ export const allowedTransitions: Record<IssueStatus, readonly IssueStatus[]> = {
     "OPEN",
     "CLOSED",
     "INVALID",
+    "REJECTED",
   ],
   DEV_IN_PROGRESS: [
     "DEV_REVIEW",
@@ -65,6 +66,7 @@ export const allowedTransitions: Record<IssueStatus, readonly IssueStatus[]> = {
     "OPEN",
     "CLOSED",
     "INVALID",
+    "REJECTED",
   ],
   DEV_REVIEW: [
     "DEV_COMPLETED",
@@ -78,6 +80,7 @@ export const allowedTransitions: Record<IssueStatus, readonly IssueStatus[]> = {
     "INVALID",
     "READY_FOR_DEV",
     "OPEN",
+    "REJECTED",
   ],
   DEV_COMPLETED: [
     "DEV_DEPLOYED",
@@ -90,6 +93,7 @@ export const allowedTransitions: Record<IssueStatus, readonly IssueStatus[]> = {
     "CLOSED",
     "INVALID",
     "OPEN",
+    "REJECTED",
   ],
   DEV_DEPLOYED: [
     "QA_IN_PROGRESS",
@@ -101,6 +105,7 @@ export const allowedTransitions: Record<IssueStatus, readonly IssueStatus[]> = {
     "CLOSED",
     "INVALID",
     "OPEN",
+    "REJECTED",
   ],
   QA_IN_PROGRESS: [
     "QA_DEPLOYED",
@@ -112,6 +117,7 @@ export const allowedTransitions: Record<IssueStatus, readonly IssueStatus[]> = {
     "CLOSED",
     "INVALID",
     "OPEN",
+    "REJECTED",
   ],
   QA_DEPLOYED: [
     "READY_FOR_RELEASE",
@@ -121,6 +127,7 @@ export const allowedTransitions: Record<IssueStatus, readonly IssueStatus[]> = {
     "CLOSED",
     "INVALID",
     "OPEN",
+    "REJECTED",
   ],
   READY_FOR_RELEASE: [
     "PROD_DEPLOYED",
@@ -129,6 +136,7 @@ export const allowedTransitions: Record<IssueStatus, readonly IssueStatus[]> = {
     "DEV_IN_PROGRESS",
     "INVALID",
     "OPEN",
+    "REJECTED",
   ],
   PROD_DEPLOYED: [
     "CLOSED",
@@ -136,6 +144,7 @@ export const allowedTransitions: Record<IssueStatus, readonly IssueStatus[]> = {
     "DEV_IN_PROGRESS",
     "READY_FOR_DEV",
     "INVALID",
+    "REJECTED",
   ],
   CLOSED: [
     "OPEN",
@@ -149,6 +158,7 @@ export const allowedTransitions: Record<IssueStatus, readonly IssueStatus[]> = {
     "READY_FOR_DEV",
     "DEV_IN_PROGRESS",
     "CLOSED",
+    "REJECTED",
   ],
 
   // Legacy mappings to preserve compatibility with existing database rows and tests
@@ -207,9 +217,11 @@ export const allowedTransitions: Record<IssueStatus, readonly IssueStatus[]> = {
     "PROD_DEPLOYED",
   ],
   REJECTED: [
+    "OPEN",
+    "READY_FOR_DEV",
+    "DEV_IN_PROGRESS",
     "IN_PROGRESS",
     "CLOSED",
-    "OPEN",
     "INVALID",
   ],
 };

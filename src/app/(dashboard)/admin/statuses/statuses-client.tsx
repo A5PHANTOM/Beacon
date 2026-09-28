@@ -29,7 +29,8 @@ const STANDARD_STATUSES: StandardStatusDef[] = [
   { key: "READY_FOR_RELEASE", label: "Ready for Release", color: "#EC4899", category: "DONE", description: "Passed QA validation and ready for production deployment." },
   { key: "PROD_DEPLOYED", label: "Prod Deployed", color: "#059669", category: "DONE", description: "Live in production environment." },
   { key: "CLOSED", label: "Closed", color: "#64748B", category: "DONE", description: "Issue lifecycle is complete and verified." },
-  { key: "INVALID", label: "Invalid", color: "#EF4444", category: "INVALID", description: "Duplicate, not reproducible, or rejected by triage." },
+  { key: "INVALID", label: "Invalid", color: "#EF4444", category: "INVALID", description: "Duplicate, not reproducible, or invalidated by triage." },
+  { key: "REJECTED", label: "Rejected", color: "#DC2626", category: "INVALID", description: "Rejected as problem not found, duplicate, or will not fix." },
 ];
 
 const PRESET_COLORS = [
