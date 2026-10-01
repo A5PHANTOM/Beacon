@@ -14,7 +14,7 @@ export default async function TimesheetsPage() {
     redirect("/login");
   }
 
-  const result = await getMemberCalendarDataAction("week");
+  const result = await getMemberCalendarDataAction("day");
 
   if (!result.success || !result.data) {
     return (

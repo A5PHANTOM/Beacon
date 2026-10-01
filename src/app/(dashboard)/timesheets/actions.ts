@@ -99,7 +99,7 @@ function toDailyCheckInDto(c: any): DailyCheckInDto {
 }
 
 export async function getMemberCalendarDataAction(
-  view: "day" | "week" | "month" = "week",
+  view: "day" | "week" | "month" = "day",
   targetDateStr?: string
 ): Promise<{ success: boolean; data?: CalendarViewData; error?: string }> {
   try {
@@ -550,6 +550,14 @@ export async function deleteTaskSlotAction(
       };
     }
 
+    const todayStr = getLocalDateString();
+    if (existing.date !== todayStr && session.user.role !== "ADMIN") {
+      return {
+        success: false,
+        error: `Strict policy: Only task slots from today (${todayStr}) can be deleted.`,
+      };
+    }
+
     await prisma.timesheetEntry.delete({
       where: { id: validated.id },
     });
@@ -569,27 +577,41 @@ export async function checkInAction(
     const session = await requireAuth();
     const userId = session.user.id;
     const validated = checkInSchema.parse(rawInput);
+    const todayStr = getLocalDateString();
 
-    const now = new Date();
+    if (validated.date !== todayStr) {
+      return {
+        success: false,
+        error: `Strict policy: Check-in can only be recorded for today (${todayStr}).`,
+      };
+    }
 
-    const record = await prisma.dailyCheckIn.upsert({
+    // Check if user has already checked in today
+    const existing = await prisma.dailyCheckIn.findUnique({
       where: {
         userId_date: {
           userId,
-          date: validated.date,
+          date: todayStr,
         },
       },
-      create: {
+    });
+
+    if (existing && existing.checkInTime) {
+      return {
+        success: false,
+        error: "Strict policy: You have already clocked in for today. Multiple check-ins are not permitted.",
+      };
+    }
+
+    const now = new Date();
+    const record = await prisma.dailyCheckIn.create({
+      data: {
         userId,
-        date: validated.date,
+        date: todayStr,
         checkInTime: now,
         workLocation: validated.workLocation,
         notes: validated.notes || null,
         status: "PRESENT",
-      },
-      update: {
-        workLocation: validated.workLocation,
-        notes: validated.notes || undefined,
       },
       include: {
         user: { select: { id: true, name: true } },
@@ -611,29 +633,51 @@ export async function checkOutAction(
     const session = await requireAuth();
     const userId = session.user.id;
     const validated = checkOutSchema.parse(rawInput);
+    const todayStr = getLocalDateString();
+
+    if (validated.date !== todayStr) {
+      return {
+        success: false,
+        error: `Strict policy: Check-out can only be recorded for today (${todayStr}).`,
+      };
+    }
 
     const existing = await prisma.dailyCheckIn.findUnique({
       where: {
         userId_date: {
           userId,
-          date: validated.date,
+          date: todayStr,
         },
       },
     });
 
-    if (!existing) {
+    if (!existing || !existing.checkInTime) {
       return {
         success: false,
-        error: "No check-in record found for this date. Please check in first.",
+        error: "Strict policy: You must clock in before you can clock out.",
+      };
+    }
+
+    if (existing.checkOutTime) {
+      return {
+        success: false,
+        error: "Strict policy: You have already clocked out for today.",
       };
     }
 
     const now = new Date();
+    if (now.getTime() <= new Date(existing.checkInTime).getTime()) {
+      return {
+        success: false,
+        error: "Check-out time must be after check-in time.",
+      };
+    }
+
     const updated = await prisma.dailyCheckIn.update({
       where: {
         userId_date: {
           userId,
-          date: validated.date,
+          date: todayStr,
         },
       },
       data: {
@@ -662,6 +706,13 @@ export async function manualCheckInAction(
 ): Promise<{ success: boolean; data?: DailyCheckInDto; error?: string }> {
   try {
     const session = await requireAuth();
+    if (session.user.role !== "ADMIN") {
+      return {
+        success: false,
+        error:
+          "Strict policy violation: Manual check-in and check-out adjustments are strictly disabled. Members must clock in and clock out directly in real time.",
+      };
+    }
     const userId = session.user.id;
     const validated = manualCheckInSchema.parse(rawInput);
 

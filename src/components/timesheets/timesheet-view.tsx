@@ -9,14 +9,12 @@ import {
   deleteTaskSlotAction,
   checkInAction,
   checkOutAction,
-  manualCheckInAction,
 } from "@/app/(dashboard)/timesheets/actions";
 import { CheckInCard } from "./checkin-card";
 import { DayView } from "./day-view";
 import { WeekView } from "./week-view";
 import { MonthView } from "./month-view";
 import { TaskSlotModal } from "./task-slot-modal";
-import { CheckInModal } from "./checkin-modal";
 import { formatMinutes } from "@/lib/timesheet-constants";
 
 export function TimesheetView({
@@ -32,7 +30,6 @@ export function TimesheetView({
   // Modals state
   const [slotModalOpen, setSlotModalOpen] = useState(false);
   const [editingSlot, setEditingSlot] = useState<TaskSlotDto | null>(null);
-  const [checkInModalOpen, setCheckInModalOpen] = useState(false);
 
   // Notification toast
   const [toastMessage, setToastMessage] = useState<string | null>(null);
@@ -105,6 +102,10 @@ export function TimesheetView({
   };
 
   const handleOpenEditSlot = (slot: TaskSlotDto) => {
+    if (slot.date !== todayStr) {
+      showToast("Strict policy: Only today's task slots can be edited.");
+      return;
+    }
     setEditingSlot(slot);
     setSlotModalOpen(true);
   };
@@ -167,20 +168,6 @@ export function TimesheetView({
     }
   };
 
-  const handleManualCheckInSave = async (inputData: {
-    date: string;
-    checkInTime: string;
-    checkOutTime?: string;
-    workLocation: "OFFICE" | "REMOTE" | "HYBRID";
-    notes?: string;
-    status: "PRESENT" | "HALF_DAY" | "ON_LEAVE";
-  }) => {
-    const res = await manualCheckInAction(inputData);
-    if (!res.success) throw new Error(res.error || "Failed to adjust check-in");
-    showToast("Check-in record saved");
-    await refreshData(view, currentDate);
-  };
-
   return (
     <div className="p-6 max-w-7xl mx-auto space-y-5 animate-float-in">
       {/* Toast Notification */}
@@ -239,18 +226,6 @@ export function TimesheetView({
               Month
             </button>
           </div>
-
-          <button
-            type="button"
-            onClick={handleOpenAddSlot}
-            className="btn-primary rounded-xl bg-[var(--accent)] text-white px-4 py-2 text-xs font-bold shadow-sm hover:opacity-95 transition cursor-pointer flex items-center gap-1.5"
-          >
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-              <line x1="12" y1="5" x2="12" y2="19" />
-              <line x1="5" y1="12" x2="19" y2="12" />
-            </svg>
-            <span>Log Today's Task</span>
-          </button>
         </div>
       </div>
 
@@ -260,7 +235,6 @@ export function TimesheetView({
         todayTotalMinutes={data.todayTotalMinutes}
         onCheckIn={handleCheckIn}
         onCheckOut={handleCheckOut}
-        onOpenAdjustModal={() => setCheckInModalOpen(true)}
       />
 
       {/* Simple Calendar Navigation Bar */}
@@ -314,7 +288,6 @@ export function TimesheetView({
             onAddSlot={handleOpenAddSlot}
             onEditSlot={handleOpenEditSlot}
             onDeleteSlot={handleDeleteSlot}
-            onOpenCheckInAdjust={() => setCheckInModalOpen(true)}
           />
         )}
 
@@ -353,15 +326,6 @@ export function TimesheetView({
         editEntry={editingSlot}
         accessibleProjects={data.accessibleProjects}
         onSave={handleSaveSlot}
-      />
-
-      {/* Check-in Adjustment Modal */}
-      <CheckInModal
-        isOpen={checkInModalOpen}
-        onClose={() => setCheckInModalOpen(false)}
-        initialDate={todayStr}
-        currentCheckIn={data.todayCheckIn}
-        onSave={handleManualCheckInSave}
       />
     </div>
   );

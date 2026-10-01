@@ -128,6 +128,8 @@ export function AppShell({
         router.push("/projects");
       } else if (e.key.toLowerCase() === "t") {
         router.push("/timesheets");
+      } else if (e.key.toLowerCase() === "a") {
+        router.push("/analytics");
       }
     }
 
@@ -260,6 +262,18 @@ export function AppShell({
             </svg>
             <span className="nav-label">Timesheets</span>
             <span className="nav-kbd">T</span>
+          </Link>
+
+          <Link
+            href="/analytics"
+            className={`nav-item ${pathname.startsWith("/analytics") ? "active" : ""}`}
+            title="Progress & Activity Analytics"
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M18 20V10M12 20V4M6 20v-6" />
+            </svg>
+            <span className="nav-label">Analytics</span>
+            <span className="nav-kbd">A</span>
           </Link>
 
           {isAdmin && (
@@ -404,6 +418,14 @@ export function AppShell({
                 My Timesheet & Calendar
               </Link>
 
+              <Link
+                href="/analytics"
+                onClick={() => setUserMenuOpen(false)}
+                className="flex items-center gap-2 rounded-lg px-3 py-1.5 text-xs text-[var(--text)] hover:bg-[var(--surface-hover)] transition"
+              >
+                Progress & Activity Analytics
+              </Link>
+
               <button
                 type="button"
                 onClick={() => signOut({ callbackUrl: "/login" })}
@@ -433,6 +455,8 @@ export function AppShell({
               <><b>Admin Console</b> / Storage Usage</>
             ) : pathname.startsWith("/admin") ? (
               <><b>Admin Console</b> / Team & Users</>
+            ) : pathname.startsWith("/analytics") ? (
+              <><b>Workspace</b> / Progress & Analytics</>
             ) : pathname.startsWith("/timesheets") ? (
               <><b>Member Portal</b> / Timesheets & Calendar</>
             ) : (
@@ -573,6 +597,20 @@ export function AppShell({
               </svg>
               My Timesheets & Calendar
               <span className="kbd-pill">T</span>
+            </div>
+
+            <div
+              className="cmdk-item"
+              onClick={() => {
+                setCmdkOpen(false);
+                router.push("/analytics");
+              }}
+            >
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M18 20V10M12 20V4M6 20v-6" />
+              </svg>
+              Progress & Activity Dashboard
+              <span className="kbd-pill">A</span>
             </div>
 
             {isAdmin && (

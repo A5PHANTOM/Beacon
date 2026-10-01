@@ -142,7 +142,7 @@ export function MonthView({
                       }}
                       className="rounded-lg bg-[var(--accent)] text-white px-2 py-0.5 text-[10.5px] font-bold shadow-xs hover:opacity-95 transition"
                     >
-                      ＋ Log
+                      + Log
                     </button>
                   </div>
                 ) : (

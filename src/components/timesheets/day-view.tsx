@@ -10,13 +10,11 @@ export function DayView({
   onAddSlot,
   onEditSlot,
   onDeleteSlot,
-  onOpenCheckInAdjust,
 }: {
   dayData?: DayCalendarData;
   onAddSlot: (date: string) => void;
   onEditSlot: (slot: TaskSlotDto) => void;
   onDeleteSlot: (slotId: string) => void;
-  onOpenCheckInAdjust: () => void;
 }) {
   if (!dayData) {
     return <div className="p-8 text-center text-xs text-[var(--text-dim)]">Loading…</div>;
@@ -36,15 +34,6 @@ export function DayView({
             <span className="text-[10px] font-bold uppercase tracking-wider text-[var(--text-faint)]">
               Daily Attendance
             </span>
-            {isToday && (
-              <button
-                type="button"
-                onClick={onOpenCheckInAdjust}
-                className="text-[11px] font-bold text-[var(--accent)] hover:underline cursor-pointer"
-              >
-                Adjust
-              </button>
-            )}
           </div>
           {checkIn ? (
             <div className="space-y-1">

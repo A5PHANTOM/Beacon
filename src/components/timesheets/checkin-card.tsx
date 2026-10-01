@@ -9,13 +9,11 @@ export function CheckInCard({
   todayTotalMinutes,
   onCheckIn,
   onCheckOut,
-  onOpenAdjustModal,
 }: {
   checkIn: DailyCheckInDto | null;
   todayTotalMinutes: number;
   onCheckIn: (location: "OFFICE" | "REMOTE" | "HYBRID") => Promise<void>;
   onCheckOut: () => Promise<void>;
-  onOpenAdjustModal: () => void;
 }) {
   const [selectedLocation, setSelectedLocation] = useState<"OFFICE" | "REMOTE" | "HYBRID">("OFFICE");
   const [elapsedSeconds, setElapsedSeconds] = useState<number>(0);
@@ -243,15 +241,6 @@ export function CheckInCard({
               <span>Clock Out</span>
             </button>
           )}
-
-          <button
-            type="button"
-            onClick={onOpenAdjustModal}
-            className="rounded-lg border border-[var(--border)] bg-[var(--surface)] hover:bg-[var(--surface-hover)] text-[var(--text-dim)] px-2.5 py-1.5 text-xs font-medium transition cursor-pointer"
-            title="Manually adjust check-in / check-out times"
-          >
-            Adjust
-          </button>
         </div>
       </div>
     </div>
