@@ -21,6 +21,8 @@ model User {
   history      IssueHistory[]
   attachments  Attachment[]
   notifications Notification[]
+  timesheetEntries TimesheetEntry[]
+  checkIns         DailyCheckIn[]
 }
 
 model Project {
@@ -33,6 +35,7 @@ model Project {
   updatedAt   DateTime        @updatedAt
   members     ProjectMember[]
   issues      Issue[]
+  timesheetEntries TimesheetEntry[]
 }
 
 model ProjectMember {
@@ -70,6 +73,7 @@ model Issue {
   history          IssueHistory[]
   outgoingLinks    IssueLink[]    @relation("SourceIssue")
   incomingLinks    IssueLink[]    @relation("LinkedIssue")
+  timesheetEntries TimesheetEntry[]
 
   @@unique([projectId, number])
   @@index([projectId, status])
@@ -142,5 +146,47 @@ model CustomStatus {
   projectId   String?
   order       Int      @default(0)
   createdAt   DateTime @default(now())
+}
+
+model TimesheetEntry {
+  id              String   @id @default(cuid())
+  userId          String
+  projectId       String?
+  issueId         String?
+  date            String   // YYYY-MM-DD
+  startTime       String?  // e.g. "09:30"
+  endTime         String?  // e.g. "11:30"
+  durationMinutes Int      // duration in minutes, e.g. 120
+  category        String   // TASK | DEFECT | FEATURE_REQUEST | CHANGE_REQUEST | APPLICATION_SUPPORT | MEETING | COMPANY_ACTIVITIES | ORG_ACTIVITIES
+  taskTitle       String
+  description     String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  project         Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  issue           Issue?   @relation(fields: [issueId], references: [id], onDelete: SetNull)
+
+  @@index([userId, date])
+  @@index([date])
+  @@index([category])
+  @@index([projectId])
+}
+
+model DailyCheckIn {
+  id           String    @id @default(cuid())
+  userId       String
+  date         String    // YYYY-MM-DD
+  checkInTime  DateTime
+  checkOutTime DateTime?
+  workLocation String?   @default("OFFICE") // OFFICE | REMOTE | HYBRID
+  notes        String?
+  status       String    @default("PRESENT") // PRESENT | HALF_DAY | ON_LEAVE
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, date])
+  @@index([userId, date])
+  @@index([date])
 }
 
