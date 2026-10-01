@@ -491,10 +491,18 @@ export async function updateTaskSlotAction(
       };
     }
 
+    const todayStr = getLocalDateString();
+    if (existing.date !== todayStr) {
+      return {
+        success: false,
+        error: "Only task slots from today can be edited.",
+      };
+    }
+
     const updated = await prisma.timesheetEntry.update({
       where: { id: validated.id },
       data: {
-        date: validated.date,
+        date: todayStr,
         taskTitle: validated.taskTitle,
         category: validated.category,
         durationMinutes: validated.durationMinutes,
