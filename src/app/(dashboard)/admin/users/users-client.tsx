@@ -15,8 +15,16 @@ import {
   Shield,
   Layers,
   BarChart3,
+  Pencil,
+  KeyRound,
 } from "lucide-react";
-import { createUserAction, deleteUserAction, checkEmailExistsAction } from "./actions";
+import {
+  createUserAction,
+  deleteUserAction,
+  checkEmailExistsAction,
+  updateUserDetailsAction,
+  resetUserPasswordAction,
+} from "./actions";
 
 type UserItem = {
   id: string;
@@ -62,6 +70,22 @@ export function UsersClient({
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [serverEmailWarning, setServerEmailWarning] = useState<string | null>(null);
+
+  // Edit user state
+  const [editingUser, setEditingUser] = useState<UserItem | null>(null);
+  const [editName, setEditName] = useState("");
+  const [editEmail, setEditEmail] = useState("");
+  const [editRole, setEditRole] = useState<"ADMIN" | "MEMBER">("MEMBER");
+  const [editLoading, setEditLoading] = useState(false);
+  const [editError, setEditError] = useState<string | null>(null);
+  const [editSuccess, setEditSuccess] = useState<string | null>(null);
+
+  // Password reset state
+  const [passwordUser, setPasswordUser] = useState<UserItem | null>(null);
+  const [newPassword, setNewPassword] = useState("1234");
+  const [passLoading, setPassLoading] = useState(false);
+  const [passError, setPassError] = useState<string | null>(null);
+  const [passSuccess, setPassSuccess] = useState<string | null>(null);
 
   // Email format and uniqueness validation
   const trimmedEmail = email.trim().toLowerCase();
@@ -172,6 +196,97 @@ export function UsersClient({
       setTimeout(() => {
         setIsModalOpen(false);
         setSuccess(null);
+      }, 1200);
+    }
+  }
+
+  const handleOpenEdit = (user: UserItem) => {
+    setEditingUser(user);
+    setEditName(user.name);
+    setEditEmail(user.email);
+    setEditRole((user.role === "ADMIN" ? "ADMIN" : "MEMBER") as "ADMIN" | "MEMBER");
+    setEditError(null);
+    setEditSuccess(null);
+  };
+
+  async function handleSaveEdit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!editingUser) return;
+    setEditError(null);
+    setEditSuccess(null);
+
+    if (!editName.trim()) {
+      setEditError("Name is required.");
+      return;
+    }
+    if (!editEmail.trim()) {
+      setEditError("Email is required.");
+      return;
+    }
+    if (!emailRegex.test(editEmail.trim().toLowerCase())) {
+      setEditError("Please enter a valid email address.");
+      return;
+    }
+
+    setEditLoading(true);
+    const res = await updateUserDetailsAction({
+      userId: editingUser.id,
+      name: editName.trim(),
+      email: editEmail.trim().toLowerCase(),
+      role: editRole,
+    });
+    setEditLoading(false);
+
+    if (!res.success || !res.data) {
+      setEditError(res.error || "Failed to update user details.");
+    } else {
+      setEditSuccess(`Details updated for ${res.data.name}!`);
+      setUsers((prev) =>
+        prev.map((u) =>
+          u.id === editingUser.id
+            ? { ...u, name: res.data!.name, email: res.data!.email, role: res.data!.role }
+            : u
+        )
+      );
+      setTimeout(() => {
+        setEditingUser(null);
+        setEditSuccess(null);
+      }, 1000);
+    }
+  }
+
+  const handleOpenPasswordReset = (user: UserItem) => {
+    setPasswordUser(user);
+    setNewPassword("1234");
+    setPassError(null);
+    setPassSuccess(null);
+  };
+
+  async function handleSavePasswordReset(e: React.FormEvent) {
+    e.preventDefault();
+    if (!passwordUser) return;
+    setPassError(null);
+    setPassSuccess(null);
+
+    if (newPassword.length < 4) {
+      setPassError("Password must be at least 4 characters.");
+      return;
+    }
+
+    setPassLoading(true);
+    const res = await resetUserPasswordAction({
+      userId: passwordUser.id,
+      newPassword,
+    });
+    setPassLoading(false);
+
+    if (!res.success) {
+      setPassError(res.error || "Failed to reset password.");
+    } else {
+      setPassSuccess(`Password reset successfully for ${passwordUser.name}!`);
+      setTimeout(() => {
+        setPasswordUser(null);
+        setPassSuccess(null);
       }, 1200);
     }
   }
@@ -457,16 +572,73 @@ export function UsersClient({
                       <div style={{ color: "var(--text-faint)" }}><b>{user._count.reported}</b> reported</div>
                     </td>
                     <td style={{ padding: "14px 20px", textAlign: "right" }}>
-                      {!isSelf && (
+                      <div style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
                         <button
                           type="button"
-                          onClick={() => handleDelete(user.id, user.name)}
-                          style={{ background: "none", border: "none", color: "var(--crit)", cursor: "pointer", padding: 4 }}
-                          title="Delete user"
+                          onClick={() => handleOpenEdit(user)}
+                          style={{
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: 4,
+                            background: "var(--surface-2)",
+                            border: "1px solid var(--border)",
+                            color: "var(--text)",
+                            borderRadius: 7,
+                            padding: "4px 8px",
+                            fontSize: 11,
+                            fontWeight: 600,
+                            cursor: "pointer",
+                            transition: "all 0.15s ease",
+                          }}
+                          title="Edit user details"
                         >
-                          <Trash2 className="h-4 w-4" />
+                          <Pencil className="h-3.5 w-3.5" style={{ color: "var(--accent)" }} />
+                          <span>Edit</span>
                         </button>
-                      )}
+
+                        <button
+                          type="button"
+                          onClick={() => handleOpenPasswordReset(user)}
+                          style={{
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: 4,
+                            background: "var(--surface-2)",
+                            border: "1px solid var(--border)",
+                            color: "var(--text)",
+                            borderRadius: 7,
+                            padding: "4px 8px",
+                            fontSize: 11,
+                            fontWeight: 600,
+                            cursor: "pointer",
+                            transition: "all 0.15s ease",
+                          }}
+                          title="Reset user password"
+                        >
+                          <KeyRound className="h-3.5 w-3.5" style={{ color: "var(--warn)" }} />
+                          <span>Reset Password</span>
+                        </button>
+
+                        {!isSelf && (
+                          <button
+                            type="button"
+                            onClick={() => handleDelete(user.id, user.name)}
+                            style={{
+                              display: "inline-flex",
+                              alignItems: "center",
+                              background: "none",
+                              border: "none",
+                              color: "var(--crit)",
+                              cursor: "pointer",
+                              padding: 4,
+                              marginLeft: 2,
+                            }}
+                            title="Delete user"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 );
@@ -758,6 +930,246 @@ export function UsersClient({
                   }}
                 >
                   {loading ? "Creating…" : "Create Account"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+      {/* Edit User Details Modal */}
+      {editingUser && (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            zIndex: 50,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            background: "var(--overlay)",
+            padding: 16,
+          }}
+        >
+          <div
+            style={{
+              width: "100%",
+              maxWidth: 480,
+              background: "var(--surface)",
+              border: "1px solid var(--border)",
+              borderRadius: 14,
+              padding: 24,
+              boxShadow: "var(--shadow-lg)",
+            }}
+          >
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", borderBottom: "1px solid var(--border)", paddingBottom: 12, marginBottom: 16 }}>
+              <div>
+                <h3 style={{ fontSize: 16, fontWeight: 700, margin: 0, color: "var(--text)" }}>Edit User Details</h3>
+                <p style={{ margin: "2px 0 0", fontSize: 12, color: "var(--text-faint)" }}>
+                  Update account name, email address, and global role.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setEditingUser(null)}
+                className="close-btn"
+              >
+                ✕
+              </button>
+            </div>
+
+            {editError && (
+              <div style={{ background: "var(--crit-soft)", border: "1px solid var(--crit-bd)", color: "var(--crit)", padding: "10px 14px", borderRadius: 8, fontSize: 12, marginBottom: 14 }}>
+                {editError}
+              </div>
+            )}
+
+            {editSuccess && (
+              <div style={{ background: "var(--ok-soft)", border: "1px solid var(--ok)", color: "var(--ok)", padding: "10px 14px", borderRadius: 8, fontSize: 12, marginBottom: 14 }}>
+                {editSuccess}
+              </div>
+            )}
+
+            <form onSubmit={handleSaveEdit}>
+              <div style={{ marginBottom: 14 }}>
+                <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: "var(--text-dim)", marginBottom: 6 }}>
+                  Full Name
+                </label>
+                <input
+                  type="text"
+                  value={editName}
+                  onChange={(e) => setEditName(e.target.value)}
+                  placeholder="e.g. John Doe"
+                  required
+                  style={{ width: "100%", background: "var(--surface-2)", border: "1px solid var(--border)", borderRadius: 8, padding: "9px 12px", fontSize: 13, color: "var(--text)", outline: "none" }}
+                />
+              </div>
+
+              <div style={{ marginBottom: 14 }}>
+                <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: "var(--text-dim)", marginBottom: 6 }}>
+                  Email Address
+                </label>
+                <input
+                  type="email"
+                  value={editEmail}
+                  onChange={(e) => setEditEmail(e.target.value)}
+                  placeholder="name@company.com"
+                  required
+                  style={{ width: "100%", background: "var(--surface-2)", border: "1px solid var(--border)", borderRadius: 8, padding: "9px 12px", fontSize: 13, color: "var(--text)", outline: "none" }}
+                />
+              </div>
+
+              <div style={{ marginBottom: 18 }}>
+                <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: "var(--text-dim)", marginBottom: 6 }}>
+                  Global Role
+                </label>
+                <select
+                  value={editRole}
+                  onChange={(e) => setEditRole(e.target.value as "ADMIN" | "MEMBER")}
+                  style={{ width: "100%", background: "var(--surface-2)", border: "1px solid var(--border)", borderRadius: 8, padding: "9px 12px", fontSize: 13, color: "var(--text)", outline: "none" }}
+                >
+                  <option value="MEMBER">Member (Standard User)</option>
+                  <option value="ADMIN">Administrator (Full Access)</option>
+                </select>
+                <p style={{ margin: "5px 0 0", fontSize: 11, color: "var(--text-faint)" }}>
+                  Administrators have full management privileges over accounts, settings, and workflows.
+                </p>
+              </div>
+
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 10, borderTop: "1px solid var(--border)", paddingTop: 14 }}>
+                <button
+                  type="button"
+                  onClick={() => setEditingUser(null)}
+                  style={{ background: "none", border: "1px solid var(--border)", borderRadius: 8, padding: "8px 14px", fontSize: 12.5, color: "var(--text-dim)", cursor: "pointer" }}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={editLoading || !editName.trim() || !editEmail.trim()}
+                  className="btn-primary"
+                  style={{ margin: 0, opacity: editLoading ? 0.6 : 1 }}
+                >
+                  {editLoading ? "Saving…" : "Save Changes"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Reset Password Modal */}
+      {passwordUser && (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            zIndex: 50,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            background: "var(--overlay)",
+            padding: 16,
+          }}
+        >
+          <div
+            style={{
+              width: "100%",
+              maxWidth: 460,
+              background: "var(--surface)",
+              border: "1px solid var(--border)",
+              borderRadius: 14,
+              padding: 24,
+              boxShadow: "var(--shadow-lg)",
+            }}
+          >
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", borderBottom: "1px solid var(--border)", paddingBottom: 12, marginBottom: 16 }}>
+              <div>
+                <h3 style={{ fontSize: 16, fontWeight: 700, margin: 0, color: "var(--text)" }}>Reset User Password</h3>
+                <p style={{ margin: "2px 0 0", fontSize: 12, color: "var(--text-faint)" }}>
+                  Set a new password for this user account.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setPasswordUser(null)}
+                className="close-btn"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div style={{ background: "var(--surface-2)", border: "1px solid var(--border)", borderRadius: 10, padding: "10px 14px", marginBottom: 16 }}>
+              <div style={{ fontSize: 11, fontWeight: 700, color: "var(--text-faint)", textTransform: "uppercase" }}>Target Account</div>
+              <div style={{ fontSize: 13, fontWeight: 700, color: "var(--text)", marginTop: 2 }}>{passwordUser.name}</div>
+              <div className="mono" style={{ fontSize: 11.5, color: "var(--text-dim)" }}>{passwordUser.email}</div>
+            </div>
+
+            {passError && (
+              <div style={{ background: "var(--crit-soft)", border: "1px solid var(--crit-bd)", color: "var(--crit)", padding: "10px 14px", borderRadius: 8, fontSize: 12, marginBottom: 14 }}>
+                {passError}
+              </div>
+            )}
+
+            {passSuccess && (
+              <div style={{ background: "var(--ok-soft)", border: "1px solid var(--ok)", color: "var(--ok)", padding: "10px 14px", borderRadius: 8, fontSize: 12, marginBottom: 14 }}>
+                {passSuccess}
+              </div>
+            )}
+
+            <form onSubmit={handleSavePasswordReset}>
+              <div style={{ marginBottom: 14 }}>
+                <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: "var(--text-dim)", marginBottom: 6 }}>
+                  New Password (min 4 chars)
+                </label>
+                <input
+                  type="text"
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  placeholder="Enter new password"
+                  required
+                  style={{ width: "100%", background: "var(--surface-2)", border: "1px solid var(--border)", borderRadius: 8, padding: "9px 12px", fontSize: 13, color: "var(--text)", outline: "none" }}
+                />
+              </div>
+
+              {/* Quick Password Presets */}
+              <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 18 }}>
+                <span style={{ fontSize: 11, color: "var(--text-faint)" }}>Quick Presets:</span>
+                {["1234", "beacon123", "P@ssword1"].map((preset) => (
+                  <button
+                    key={preset}
+                    type="button"
+                    onClick={() => setNewPassword(preset)}
+                    style={{
+                      background: "var(--surface-2)",
+                      border: "1px solid var(--border)",
+                      color: "var(--accent)",
+                      borderRadius: 6,
+                      padding: "2px 8px",
+                      fontSize: 11,
+                      fontWeight: 600,
+                      cursor: "pointer",
+                    }}
+                  >
+                    {preset}
+                  </button>
+                ))}
+              </div>
+
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 10, borderTop: "1px solid var(--border)", paddingTop: 14 }}>
+                <button
+                  type="button"
+                  onClick={() => setPasswordUser(null)}
+                  style={{ background: "none", border: "1px solid var(--border)", borderRadius: 8, padding: "8px 14px", fontSize: 12.5, color: "var(--text-dim)", cursor: "pointer" }}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={passLoading || newPassword.length < 4}
+                  className="btn-primary"
+                  style={{ margin: 0, opacity: (passLoading || newPassword.length < 4) ? 0.6 : 1 }}
+                >
+                  {passLoading ? "Resetting…" : "Reset Password"}
                 </button>
               </div>
             </form>

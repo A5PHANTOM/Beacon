@@ -207,14 +207,6 @@ export function IssueWorkspace({
   const [footerStatusOpen, setFooterStatusOpen] = useState(false);
   const [footerAssignOpen, setFooterAssignOpen] = useState(false);
 
-  // Developer Status Change Modal with Optional Notes
-  const [statusNoteModal, setStatusNoteModal] = useState<{
-    issueId: string;
-    issueKey: string;
-    issueTitle: string;
-    targetStatus: IssueStatus | string;
-  } | null>(null);
-  const [statusNoteText, setStatusNoteText] = useState("");
 
   // New Issue modal
   const [isNewOpen, setIsNewOpen] = useState(false);
@@ -320,8 +312,6 @@ export function IssueWorkspace({
       if (e.key === "Escape") {
         if (previewImage) {
           setPreviewImage(null);
-        } else if (statusNoteModal) {
-          setStatusNoteModal(null);
         } else if (isNewOpen) {
           setIsNewOpen(false);
         } else if (selected) {
@@ -331,7 +321,7 @@ export function IssueWorkspace({
     }
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [previewImage, statusNoteModal, isNewOpen, selected]);
+  }, [previewImage, isNewOpen, selected]);
 
   // Roles: Tester can raise issues & update status; Developer manages In Progress, Fixed, Rejected
   const isTester = currentUser.roleInProject === "QA" && currentUser.role !== "ADMIN";
@@ -891,12 +881,11 @@ export function IssueWorkspace({
 
   function requestStatusChange(
     issueId: string,
-    issueKey: string,
-    issueTitle: string,
+    _issueKey: string,
+    _issueTitle: string,
     targetStatus: IssueStatus | string
   ) {
-    setStatusNoteText("");
-    setStatusNoteModal({ issueId, issueKey, issueTitle, targetStatus });
+    handleTransition(issueId, targetStatus);
   }
 
   async function handleTransition(
@@ -3272,181 +3261,6 @@ export function IssueWorkspace({
         document.body
       )}
 
-      {/* DEVELOPER STATUS CHANGE MODAL WITH OPTIONAL NOTES */}
-      {mounted && statusNoteModal && createPortal(
-        <div
-          style={{
-            position: "fixed",
-            inset: 0,
-            background: "var(--overlay)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            zIndex: 99999,
-            padding: "40px 16px 24px",
-            overflowY: "auto",
-          }}
-          onClick={() => setStatusNoteModal(null)}
-        >
-          <div
-            style={{
-              width: 500,
-              maxWidth: "100%",
-              background: "var(--surface)",
-              border: "1px solid var(--border)",
-              borderRadius: 14,
-              boxShadow: "var(--shadow-lg)",
-              padding: "22px 24px",
-              margin: "auto",
-              maxHeight: "90vh",
-              overflowY: "auto",
-            }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            {/* Header */}
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "space-between",
-                marginBottom: 12,
-              }}
-            >
-              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                <span className="row-id mono" style={{ fontSize: 13, fontWeight: 700 }}>
-                  {statusNoteModal.issueKey}
-                </span>
-                <span style={{ color: "var(--text-faint)" }}>→</span>
-                <span
-                  style={{
-                    display: "inline-flex",
-                    alignItems: "center",
-                    gap: 6,
-                    fontSize: 12,
-                    fontWeight: 700,
-                    padding: "3px 9px",
-                    borderRadius: 6,
-                    background:
-                      statusNoteModal.targetStatus === "REJECTED"
-                        ? "var(--crit-soft)"
-                        : statusNoteModal.targetStatus === "FIXED"
-                        ? "var(--ok-soft)"
-                        : "var(--accent-soft)",
-                    color:
-                      statusNoteModal.targetStatus === "REJECTED"
-                        ? "var(--crit)"
-                        : statusNoteModal.targetStatus === "FIXED"
-                        ? "var(--ok)"
-                        : "var(--accent)",
-                    border: `1px solid ${
-                      statusNoteModal.targetStatus === "REJECTED"
-                        ? "var(--crit-bd)"
-                        : "transparent"
-                    }`,
-                  }}
-                >
-                  <span
-                    className="dd-dot"
-                    style={{ background: getStatusDotColor(statusNoteModal.targetStatus) }}
-                  />
-                  {getStatusLabel(statusNoteModal.targetStatus)}
-                </span>
-              </div>
-              <button
-                type="button"
-                className="close-btn"
-                onClick={() => setStatusNoteModal(null)}
-              >
-                ✕
-              </button>
-            </div>
-
-            <h3
-              style={{
-                fontSize: 15,
-                fontWeight: 700,
-                margin: "0 0 16px",
-                lineHeight: 1.4,
-              }}
-            >
-              {statusNoteModal.issueTitle}
-            </h3>
-
-            {/* Optional Notes Input */}
-            <div style={{ marginBottom: 20 }}>
-              <label
-                style={{
-                  display: "block",
-                  fontSize: 12,
-                  fontWeight: 600,
-                  color: "var(--text-dim)",
-                  marginBottom: 6,
-                }}
-              >
-                Resolution Notes (Optional)
-              </label>
-              <textarea
-                value={statusNoteText}
-                onChange={(e) => setStatusNoteText(e.target.value)}
-                placeholder={
-                  statusNoteModal.targetStatus === "REJECTED"
-                    ? "Explain why the issue could not be reproduced or found (e.g. unable to reproduce on production environment, verified with latest build)..."
-                    : statusNoteModal.targetStatus === "FIXED"
-                    ? "Add notes on the fix or commit details (e.g. patched null check in webhook handler)..."
-                    : "Add optional developer notes on work in progress..."
-                }
-                rows={3}
-                className="comment-input"
-                style={{ width: "100%", boxSizing: "border-box" }}
-                autoFocus
-              />
-            </div>
-
-            {/* Actions */}
-            <div
-              style={{
-                display: "flex",
-                justifyContent: "flex-end",
-                gap: 10,
-              }}
-            >
-              <button
-                type="button"
-                className="btn-ghost"
-                style={{ flex: "none", padding: "8px 16px" }}
-                onClick={() => setStatusNoteModal(null)}
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                className="btn-primary"
-                disabled={transitionLoading}
-                style={{
-                  margin: 0,
-                  background:
-                    statusNoteModal.targetStatus === "REJECTED"
-                      ? "var(--crit)"
-                      : statusNoteModal.targetStatus === "FIXED"
-                      ? "var(--ok)"
-                      : "var(--accent)",
-                }}
-                onClick={() => {
-                  handleTransition(
-                    statusNoteModal.issueId,
-                    statusNoteModal.targetStatus,
-                    statusNoteText
-                  );
-                  setStatusNoteModal(null);
-                }}
-              >
-                {transitionLoading ? "Saving…" : "Confirm Status Change"}
-              </button>
-            </div>
-          </div>
-        </div>,
-        document.body
-      )}
 
       {/* FULLSCREEN IMAGE LIGHTBOX MODAL */}
       {mounted && previewImage && createPortal(
