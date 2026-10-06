@@ -5,6 +5,7 @@ import type { AdminTimesheetReportData, TaskSlotDto } from "@/lib/timesheet-type
 import { getAdminTimesheetReportsAction } from "@/app/(dashboard)/admin/timesheets/actions";
 import { formatMinutes, TIMESHEET_CATEGORIES } from "@/lib/timesheet-constants";
 import { CategoryBadge } from "./category-badge";
+import { Pagination } from "@/components/ui/pagination";
 
 export function AdminTimesheetReports({
   initialData,
@@ -22,8 +23,13 @@ export function AdminTimesheetReports({
   const [selectedMemberModal, setSelectedMemberModal] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
+  // Pagination for Detailed Task Slots Log
+  const [taskSlotsPage, setTaskSlotsPage] = useState<number>(1);
+  const [taskSlotsPageSize, setTaskSlotsPageSize] = useState<number>(15);
+
   const handleApplyFilter = (overridePreset?: string) => {
     const activePreset = overridePreset || preset;
+    setTaskSlotsPage(1);
     startTransition(async () => {
       const res = await getAdminTimesheetReportsAction({
         preset: activePreset,
@@ -98,6 +104,11 @@ export function AdminTimesheetReports({
       (e.description && e.description.toLowerCase().includes(q))
     );
   });
+
+  const paginatedEntries = filteredEntries.slice(
+    (taskSlotsPage - 1) * taskSlotsPageSize,
+    taskSlotsPage * taskSlotsPageSize
+  );
 
   const memberModalSlots = selectedMemberModal
     ? data.recentEntries.filter((e) => e.userId === selectedMemberModal)
@@ -501,7 +512,10 @@ export function AdminTimesheetReports({
               type="text"
               placeholder="Search by task, member, project…"
               value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
+              onChange={(e) => {
+                setSearchQuery(e.target.value);
+                setTaskSlotsPage(1);
+              }}
               className="w-full rounded-lg border border-[var(--border)] bg-[var(--surface-2)] px-3 py-1.5 text-xs text-[var(--text)] placeholder:text-[var(--text-faint)] focus:outline-hidden focus:border-[var(--accent)]"
             />
           </div>
@@ -527,7 +541,7 @@ export function AdminTimesheetReports({
                   </td>
                 </tr>
               ) : (
-                filteredEntries.map((e) => (
+                paginatedEntries.map((e) => (
                   <tr key={e.id} className="hover:bg-[var(--surface-hover)]/60 transition">
                     <td className="py-3 px-4 mono text-[11px] text-[var(--text-dim)] whitespace-nowrap">
                       {e.date}
@@ -560,6 +574,21 @@ export function AdminTimesheetReports({
             </tbody>
           </table>
         </div>
+
+        {filteredEntries.length > 0 && (
+          <Pagination
+            currentPage={taskSlotsPage}
+            totalItems={filteredEntries.length}
+            pageSize={taskSlotsPageSize}
+            onPageChange={setTaskSlotsPage}
+            pageSizeOptions={[10, 15, 25, 50, 100]}
+            onPageSizeChange={(newSize) => {
+              setTaskSlotsPageSize(newSize);
+              setTaskSlotsPage(1);
+            }}
+            itemLabel="task entries"
+          />
+        )}
       </div>
 
       {/* Member Details Modal */}

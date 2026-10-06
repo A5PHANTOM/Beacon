@@ -54,7 +54,7 @@ export default async function ProjectIssuesPage({ params }: Props) {
   // Fetch project issues
   const rawIssues = await prisma.issue.findMany({
     where: { projectId: project.id },
-    orderBy: { createdAt: "desc" },
+    orderBy: { number: "desc" },
     include: {
       reporter: {
         select: { name: true },

@@ -37,6 +37,7 @@ import type {
   TesterPerformance,
 } from "./actions";
 import { getSystemAnalyticsAction } from "./actions";
+import { Pagination } from "@/components/ui/pagination";
 
 export function AnalyticsClient({
   initialData,
@@ -52,6 +53,16 @@ export function AnalyticsClient({
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [downloadingPdf, setDownloadingPdf] = useState<string | null>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+
+  // Pagination states
+  const [projectMatrixPage, setProjectMatrixPage] = useState<number>(1);
+  const [projectMatrixPageSize, setProjectMatrixPageSize] = useState<number>(10);
+  const [testerPage, setTesterPage] = useState<number>(1);
+  const [testerPageSize, setTesterPageSize] = useState<number>(10);
+  const [workloadPage, setWorkloadPage] = useState<number>(1);
+  const [workloadPageSize, setWorkloadPageSize] = useState<number>(10);
+  const [recentIssuesPage, setRecentIssuesPage] = useState<number>(1);
+  const [recentIssuesPageSize, setRecentIssuesPageSize] = useState<number>(10);
 
   const showToast = (msg: string) => {
     setToastMessage(msg);
@@ -112,6 +123,28 @@ export function AnalyticsClient({
     (p) =>
       p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       p.key.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
+  const paginatedProjects = filteredProjects.slice(
+    (projectMatrixPage - 1) * projectMatrixPageSize,
+    projectMatrixPage * projectMatrixPageSize
+  );
+
+  const paginatedTesters = data.testers.slice(
+    (testerPage - 1) * testerPageSize,
+    testerPage * testerPageSize
+  );
+
+  const projectMembers = selectedProject?.members || [];
+  const paginatedMembers = projectMembers.slice(
+    (workloadPage - 1) * workloadPageSize,
+    workloadPage * workloadPageSize
+  );
+
+  const projectRecentIssues = selectedProject?.recentIssues || [];
+  const paginatedRecentIssues = projectRecentIssues.slice(
+    (recentIssuesPage - 1) * recentIssuesPageSize,
+    recentIssuesPage * recentIssuesPageSize
   );
 
   // Maximum issues assigned across developers for relative bar graphs
@@ -1272,8 +1305,8 @@ export function AnalyticsClient({
                       </tr>
                     </thead>
                     <tbody>
-                      {data.testers.map((t, idx) => (
-                        <tr key={t.id} style={{ borderBottom: idx === data.testers.length - 1 ? "none" : "1px solid var(--border)" }}>
+                      {paginatedTesters.map((t, idx) => (
+                        <tr key={t.id} style={{ borderBottom: idx === paginatedTesters.length - 1 ? "none" : "1px solid var(--border)" }}>
                           <td style={{ padding: "10px 12px", fontWeight: 700, color: "var(--text)" }}>
                             {t.name}
                           </td>
@@ -1297,6 +1330,23 @@ export function AnalyticsClient({
                     </tbody>
                   </table>
                 </div>
+
+                {data.testers.length > testerPageSize && (
+                  <div style={{ marginTop: 12 }}>
+                    <Pagination
+                      currentPage={testerPage}
+                      totalItems={data.testers.length}
+                      pageSize={testerPageSize}
+                      onPageChange={setTesterPage}
+                      pageSizeOptions={[5, 10, 20]}
+                      onPageSizeChange={(newSize) => {
+                        setTesterPageSize(newSize);
+                        setTesterPage(1);
+                      }}
+                      itemLabel="testers"
+                    />
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -1349,7 +1399,10 @@ export function AnalyticsClient({
                   type="text"
                   placeholder="Filter projects..."
                   value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
+                  onChange={(e) => {
+                    setSearchQuery(e.target.value);
+                    setProjectMatrixPage(1);
+                  }}
                   style={{
                     width: "100%",
                     padding: "6px 10px 6px 30px",
@@ -1398,16 +1451,18 @@ export function AnalyticsClient({
                       </td>
                     </tr>
                   ) : (
-                    filteredProjects.map((p, idx) => (
+                    paginatedProjects.map((p, idx) => (
                       <tr
                         key={p.id}
                         style={{
-                          borderBottom: idx === filteredProjects.length - 1 ? "none" : "1px solid var(--border)",
+                          borderBottom: idx === paginatedProjects.length - 1 ? "none" : "1px solid var(--border)",
                           cursor: "pointer",
                           transition: "background 0.1s ease",
                         }}
                         onClick={() => {
                           setSelectedProjectId(p.id);
+                          setWorkloadPage(1);
+                          setRecentIssuesPage(1);
                           setActiveTab("project");
                         }}
                         onMouseEnter={(e) => (e.currentTarget.style.background = "var(--surface-hover)")}
@@ -1541,6 +1596,23 @@ export function AnalyticsClient({
                 </tbody>
               </table>
             </div>
+
+            {filteredProjects.length > 0 && (
+              <div style={{ padding: "12px 18px", borderTop: "1px solid var(--border)" }}>
+                <Pagination
+                  currentPage={projectMatrixPage}
+                  totalItems={filteredProjects.length}
+                  pageSize={projectMatrixPageSize}
+                  onPageChange={setProjectMatrixPage}
+                  pageSizeOptions={[5, 10, 20, 50]}
+                  onPageSizeChange={(newSize) => {
+                    setProjectMatrixPageSize(newSize);
+                    setProjectMatrixPage(1);
+                  }}
+                  itemLabel="projects"
+                />
+              </div>
+            )}
           </div>
         </div>
       ) : (
@@ -2043,18 +2115,18 @@ export function AnalyticsClient({
                   </tr>
                 </thead>
                 <tbody>
-                  {selectedProject?.members.length === 0 ? (
+                  {projectMembers.length === 0 ? (
                     <tr>
                       <td colSpan={6} style={{ padding: "24px", textAlign: "center", color: "var(--text-faint)" }}>
                         No members assigned to this project yet.
                       </td>
                     </tr>
                   ) : (
-                    selectedProject?.members.map((m, idx) => (
+                    paginatedMembers.map((m, idx) => (
                       <tr
                         key={m.id}
                         style={{
-                          borderBottom: idx === selectedProject.members.length - 1 ? "none" : "1px solid var(--border)",
+                          borderBottom: idx === paginatedMembers.length - 1 ? "none" : "1px solid var(--border)",
                         }}
                       >
                         <td style={{ padding: "12px 18px", fontWeight: 600, color: "var(--text)" }}>{m.name}</td>
@@ -2091,6 +2163,23 @@ export function AnalyticsClient({
                 </tbody>
               </table>
             </div>
+
+            {projectMembers.length > 0 && (
+              <div style={{ padding: "12px 18px", borderTop: "1px solid var(--border)" }}>
+                <Pagination
+                  currentPage={workloadPage}
+                  totalItems={projectMembers.length}
+                  pageSize={workloadPageSize}
+                  onPageChange={setWorkloadPage}
+                  pageSizeOptions={[5, 10, 20, 50]}
+                  onPageSizeChange={(newSize) => {
+                    setWorkloadPageSize(newSize);
+                    setWorkloadPage(1);
+                  }}
+                  itemLabel="members"
+                />
+              </div>
+            )}
           </div>
 
           {/* Recent Issues in Project */}
@@ -2133,18 +2222,18 @@ export function AnalyticsClient({
                   </tr>
                 </thead>
                 <tbody>
-                  {selectedProject?.recentIssues.length === 0 ? (
+                  {projectRecentIssues.length === 0 ? (
                     <tr>
                       <td colSpan={6} style={{ padding: "24px", textAlign: "center", color: "var(--text-faint)" }}>
                         No issues created in this project yet.
                       </td>
                     </tr>
                   ) : (
-                    selectedProject?.recentIssues.map((iss, idx) => (
+                    paginatedRecentIssues.map((iss, idx) => (
                       <tr
                         key={iss.id}
                         style={{
-                          borderBottom: idx === selectedProject.recentIssues.length - 1 ? "none" : "1px solid var(--border)",
+                          borderBottom: idx === paginatedRecentIssues.length - 1 ? "none" : "1px solid var(--border)",
                         }}
                       >
                         <td style={{ padding: "12px 18px", fontWeight: 700, fontFamily: "monospace", color: "var(--info)" }}>
@@ -2215,6 +2304,23 @@ export function AnalyticsClient({
                 </tbody>
               </table>
             </div>
+
+            {projectRecentIssues.length > 0 && (
+              <div style={{ padding: "12px 18px", borderTop: "1px solid var(--border)" }}>
+                <Pagination
+                  currentPage={recentIssuesPage}
+                  totalItems={projectRecentIssues.length}
+                  pageSize={recentIssuesPageSize}
+                  onPageChange={setRecentIssuesPage}
+                  pageSizeOptions={[5, 10, 20, 50]}
+                  onPageSizeChange={(newSize) => {
+                    setRecentIssuesPageSize(newSize);
+                    setRecentIssuesPage(1);
+                  }}
+                  itemLabel="recent issues"
+                />
+              </div>
+            )}
           </div>
         </div>
       )}

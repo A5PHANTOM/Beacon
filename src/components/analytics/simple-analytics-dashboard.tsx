@@ -5,6 +5,7 @@ import Link from "next/link";
 import type { MemberProgressData } from "@/app/(dashboard)/analytics/actions";
 import { formatMinutes } from "@/lib/timesheet-constants";
 import { CategoryBadge } from "@/components/timesheets/category-badge";
+import { Pagination } from "@/components/ui/pagination";
 
 export function SimpleAnalyticsDashboard({
   data,
@@ -12,6 +13,14 @@ export function SimpleAnalyticsDashboard({
   data: MemberProgressData;
 }) {
   const { user, targets, attendance, categoryBreakdown, projectBreakdown, weeklyVelocity, recentActivity, teamPulse } = data;
+
+  const [activityPage, setActivityPage] = useState<number>(1);
+  const [activityPageSize, setActivityPageSize] = useState<number>(5);
+
+  const paginatedRecentActivity = recentActivity.slice(
+    (activityPage - 1) * activityPageSize,
+    activityPage * activityPageSize
+  );
 
   const maxWeeklyHours = Math.max(8, ...weeklyVelocity.map((v) => v.hours));
 
@@ -309,34 +318,62 @@ export function SimpleAnalyticsDashboard({
         </div>
 
         {/* Recent Tasks Completed */}
-        <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-5 shadow-xs space-y-3">
-          <h3 className="text-sm font-bold text-[var(--text)]">
-            Recent Work Logged
-          </h3>
-          <div className="space-y-2 max-h-[190px] overflow-y-auto pr-1">
-            {recentActivity.length === 0 ? (
-              <div className="text-xs text-[var(--text-faint)] py-4 text-center">
-                No recent activity logged
-              </div>
-            ) : (
-              recentActivity.map((item) => (
-                <div
-                  key={item.id}
-                  className="rounded-xl border border-[var(--border)] bg-[var(--surface-2)]/60 p-2.5 space-y-1"
-                >
-                  <div className="flex items-center justify-between gap-1">
-                    <CategoryBadge category={item.category} size="sm" />
-                    <span className="mono text-[10px] font-bold text-[var(--accent)]">
-                      {formatMinutes(item.durationMinutes)}
-                    </span>
-                  </div>
-                  <div className="text-xs font-medium text-[var(--text)] truncate" title={item.taskTitle}>
-                    {item.taskTitle}
-                  </div>
+        <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-5 shadow-xs space-y-3 flex flex-col justify-between">
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-bold text-[var(--text)]">
+                Recent Work Logged
+              </h3>
+              {recentActivity.length > 0 && (
+                <span className="mono text-xs text-[var(--text-faint)]">
+                  {recentActivity.length} Total
+                </span>
+              )}
+            </div>
+
+            <div className="space-y-2">
+              {recentActivity.length === 0 ? (
+                <div className="text-xs text-[var(--text-faint)] py-4 text-center">
+                  No recent activity logged
                 </div>
-              ))
-            )}
+              ) : (
+                paginatedRecentActivity.map((item) => (
+                  <div
+                    key={item.id}
+                    className="rounded-xl border border-[var(--border)] bg-[var(--surface-2)]/60 p-2.5 space-y-1"
+                  >
+                    <div className="flex items-center justify-between gap-1">
+                      <CategoryBadge category={item.category} size="sm" />
+                      <span className="mono text-[10px] font-bold text-[var(--accent)]">
+                        {formatMinutes(item.durationMinutes)}
+                      </span>
+                    </div>
+                    <div className="text-xs font-medium text-[var(--text)] truncate" title={item.taskTitle}>
+                      {item.taskTitle}
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
           </div>
+
+          {recentActivity.length > 0 && (
+            <div className="pt-2 border-t border-[var(--border)]">
+              <Pagination
+                currentPage={activityPage}
+                totalItems={recentActivity.length}
+                pageSize={activityPageSize}
+                onPageChange={setActivityPage}
+                pageSizeOptions={[5, 10, 20]}
+                onPageSizeChange={(newSize) => {
+                  setActivityPageSize(newSize);
+                  setActivityPage(1);
+                }}
+                itemLabel="tasks"
+                compact={true}
+              />
+            </div>
+          )}
         </div>
       </div>
     </div>

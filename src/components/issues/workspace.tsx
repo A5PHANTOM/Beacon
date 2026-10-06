@@ -14,6 +14,7 @@ import {
   deleteIssueAttachmentFromProjectAction,
 } from "@/app/(dashboard)/projects/[id]/actions";
 import { useRouter } from "next/navigation";
+import { Pagination } from "@/components/ui/pagination";
 
 export type WorkspaceIssue = {
   id: string;
@@ -190,9 +191,17 @@ export function IssueWorkspace({
   const [filterSeverity, setFilterSeverity] = useState<string>("ALL");
   const [filterAssignee, setFilterAssignee] = useState<string>("ALL");
   const [filterStatus, setFilterStatus] = useState<string>("ALL");
-  const [sortBy, setSortBy] = useState<string>("RATING_DESC");
+  const [sortBy, setSortBy] = useState<string>("ID_DESC");
   const [myTasksOnly, setMyTasksOnly] = useState(false);
   const [raisedByMeOnly, setRaisedByMeOnly] = useState(false);
+
+  // Pagination for Issues List
+  const [issuesPage, setIssuesPage] = useState<number>(1);
+  const [issuesPageSize, setIssuesPageSize] = useState<number>(20);
+
+  useEffect(() => {
+    setIssuesPage(1);
+  }, [filterSeverity, filterAssignee, filterStatus, myTasksOnly, raisedByMeOnly, sortBy]);
 
   // Row dropdown & animation state
   const [openRowStatusId, setOpenRowStatusId] = useState<string | null>(null);
@@ -558,22 +567,30 @@ export function IssueWorkspace({
   // Sort issues
   const sortedIssues = useMemo(() => {
     const list = [...visibleIssues];
-    if (sortBy === "RATING_DESC") {
+    if (sortBy === "ID_DESC") {
+      list.sort((a, b) => b.number - a.number);
+    } else if (sortBy === "ID_ASC" || sortBy === "KEY") {
+      list.sort((a, b) => a.number - b.number);
+    } else if (sortBy === "RATING_DESC") {
       const rank: Record<string, number> = { CRITICAL: 4, URGENT: 4, HIGH: 3, MEDIUM: 2, LOW: 1 };
       list.sort((a, b) => {
         const rA = Math.max(rank[a.priority] || 0, rank[a.severity] || 0);
         const rB = Math.max(rank[b.priority] || 0, rank[b.severity] || 0);
-        return rB - rA;
+        if (rB !== rA) return rB - rA;
+        return b.number - a.number;
       });
     } else if (sortBy === "NEWEST") {
       list.sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
     } else if (sortBy === "OLDEST") {
       list.sort((a, b) => new Date(a.createdAt || 0).getTime() - new Date(b.createdAt || 0).getTime());
-    } else if (sortBy === "KEY") {
-      list.sort((a, b) => a.number - b.number);
     }
     return list;
   }, [visibleIssues, sortBy]);
+
+  // Paginated issues for current view
+  const paginatedIssues = useMemo(() => {
+    return sortedIssues.slice((issuesPage - 1) * issuesPageSize, issuesPage * issuesPageSize);
+  }, [sortedIssues, issuesPage, issuesPageSize]);
 
   // Metrics
   const totalIssuesCount = issues.length;
@@ -1238,7 +1255,9 @@ export function IssueWorkspace({
             Issues
           </h2>
           <span style={{ fontSize: 12, color: "var(--text-faint)", fontFamily: "'IBM Plex Mono', monospace" }}>
-            Showing {visibleIssues.length} of {totalIssuesCount} total
+            {sortedIssues.length === 0
+              ? `0 of ${totalIssuesCount} total`
+              : `Showing ${(issuesPage - 1) * issuesPageSize + 1}–${Math.min(sortedIssues.length, issuesPage * issuesPageSize)} of ${sortedIssues.length} filtered (${totalIssuesCount} total)`}
           </span>
         </div>
 
@@ -1440,10 +1459,11 @@ export function IssueWorkspace({
             value={sortBy}
             onChange={(e) => setSortBy(e.target.value)}
           >
-            <option value="RATING_DESC">Rating (Highest)</option>
+            <option value="ID_DESC">ID (Highest)</option>
+            <option value="ID_ASC">ID (Lowest)</option>
             <option value="NEWEST">Newest</option>
             <option value="OLDEST">Oldest</option>
-            <option value="KEY">Key</option>
+            <option value="RATING_DESC">Rating / Priority</option>
           </select>
           <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
             <path d="M6 9l6 6 6-6" />
@@ -1546,12 +1566,30 @@ export function IssueWorkspace({
         {/* Table Column Headers */}
         <div className="issue-list-head">
           <span style={{ width: 4 }} />
-          <span>Rating</span>
-          <span>Key</span>
+          <span
+            style={{ cursor: "pointer", userSelect: "none" }}
+            onClick={() => setSortBy((prev) => (prev === "RATING_DESC" ? "ID_DESC" : "RATING_DESC"))}
+            title="Sort by Rating / Priority"
+          >
+            Rating {sortBy === "RATING_DESC" ? "▼" : ""}
+          </span>
+          <span
+            style={{ cursor: "pointer", userSelect: "none" }}
+            onClick={() => setSortBy((prev) => (prev === "ID_DESC" ? "ID_ASC" : "ID_DESC"))}
+            title="Sort by ID (Key)"
+          >
+            Key {sortBy === "ID_DESC" ? "▼" : sortBy === "ID_ASC" ? "▲" : ""}
+          </span>
           <span>Issue Title</span>
           <span>Tag</span>
           <span>Assignee</span>
-          <span>Updated</span>
+          <span
+            style={{ cursor: "pointer", userSelect: "none" }}
+            onClick={() => setSortBy((prev) => (prev === "NEWEST" ? "OLDEST" : "NEWEST"))}
+            title="Sort by Date"
+          >
+            Updated {sortBy === "NEWEST" ? "▼" : sortBy === "OLDEST" ? "▲" : ""}
+          </span>
           <span>Status</span>
           <span className="th-actions">Actions</span>
         </div>
@@ -1572,7 +1610,7 @@ export function IssueWorkspace({
             </a>
           </div>
         ) : (
-          sortedIssues.map((issue) => {
+          paginatedIssues.map((issue) => {
             const rating = getRating(issue);
             const priClass = getPriClass(issue.priority);
             const isLanded = landedId === issue.id;
@@ -1826,6 +1864,23 @@ export function IssueWorkspace({
           })
         )}
       </div>
+
+      {sortedIssues.length > 0 && (
+        <div style={{ marginTop: 12, marginBottom: 20 }}>
+          <Pagination
+            currentPage={issuesPage}
+            totalItems={sortedIssues.length}
+            pageSize={issuesPageSize}
+            onPageChange={setIssuesPage}
+            pageSizeOptions={[10, 20, 50, 100]}
+            onPageSizeChange={(newSize) => {
+              setIssuesPageSize(newSize);
+              setIssuesPage(1);
+            }}
+            itemLabel="issues"
+          />
+        </div>
+      )}
 
       {/* CENTERED ISSUE DETAILS MODAL */}
       {mounted && selected && createPortal(
