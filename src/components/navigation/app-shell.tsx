@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { signOut } from "next-auth/react";
 import { AnimatedBackground } from "@/components/ui/animated-background";
+import { ProjectNotesModal } from "./project-notes-modal";
 
 type SimpleProject = {
   id: string;
@@ -40,6 +41,8 @@ export function AppShell({
   const [toasts, setToasts] = useState<{ id: number; text: string }[]>([]);
   const [wsDropdownOpen, setWsDropdownOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
+  const [notesModalOpen, setNotesModalOpen] = useState(false);
+  const [notesModalTab, setNotesModalTab] = useState<"contacts" | "passwords" | "notes">("contacts");
   const wsRef = React.useRef<HTMLDivElement>(null);
   const userMenuRef = React.useRef<HTMLDivElement>(null);
 
@@ -119,9 +122,16 @@ export function AppShell({
       }
       if (isInput) return;
 
+      if (e.altKey && e.key.toLowerCase() === "n") {
+        e.preventDefault();
+        setNotesModalOpen((o) => !o);
+        return;
+      }
       if (e.key === "/") {
         e.preventDefault();
         setCmdkOpen(true);
+      } else if (e.key.toLowerCase() === "n") {
+        setNotesModalOpen(true);
       } else if (e.key.toLowerCase() === "i" && currentProject.id) {
         router.push(`/projects/${currentProject.id}`);
       } else if (e.key.toLowerCase() === "p") {
@@ -480,6 +490,45 @@ export function AppShell({
 
           {/* Actions & Theme */}
           <div className="top-actions">
+            {/* Common Project Notes & Directory */}
+            <button
+              type="button"
+              className="top-notes-btn"
+              onClick={() => {
+                setNotesModalTab("contacts");
+                setNotesModalOpen(true);
+              }}
+              title={`Project Notes & Team Directory for ${currentProject.name} (Press N)`}
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" style={{ color: "var(--accent)" }}>
+                <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" />
+                <rect x="8" y="2" width="8" height="4" rx="1" ry="1" />
+                <path d="M9 12h6M9 16h4" />
+              </svg>
+              <span>Notes</span>
+              <span className="notes-pill">
+                {currentProject?.key || "ALL"}
+              </span>
+            </button>
+
+            {/* Password Manager Vault Button */}
+            <button
+              type="button"
+              className="top-notes-btn"
+              onClick={() => {
+                setNotesModalTab("passwords");
+                setNotesModalOpen(true);
+              }}
+              title={`Password Manager & Credentials Vault for ${currentProject.name}`}
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" style={{ color: "var(--accent)" }}>
+                <circle cx="7.5" cy="15.5" r="5.5" />
+                <path d="M21 2l-9.6 9.6" />
+                <path d="M15.5 7.5l3 3L22 7l-3-3" />
+              </svg>
+              <span>Vault</span>
+            </button>
+
             <button
               type="button"
               className="icon-btn has-unread"
@@ -613,6 +662,40 @@ export function AppShell({
               <span className="kbd-pill">A</span>
             </div>
 
+            <div
+              className="cmdk-item"
+              onClick={() => {
+                setCmdkOpen(false);
+                setNotesModalTab("contacts");
+                setNotesModalOpen(true);
+              }}
+            >
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" />
+                <rect x="8" y="2" width="8" height="4" rx="1" ry="1" />
+                <path d="M9 12h6M9 16h4" />
+              </svg>
+              Project Notes & User Emails Directory
+              <span className="kbd-pill">N</span>
+            </div>
+
+            <div
+              className="cmdk-item"
+              onClick={() => {
+                setCmdkOpen(false);
+                setNotesModalTab("passwords");
+                setNotesModalOpen(true);
+              }}
+            >
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <circle cx="7.5" cy="15.5" r="5.5" />
+                <path d="M21 2l-9.6 9.6" />
+                <path d="M15.5 7.5l3 3L22 7l-3-3" />
+              </svg>
+              Password Manager & Credentials Vault
+              <span className="kbd-pill">V</span>
+            </div>
+
             {isAdmin && (
               <>
                 <div
@@ -676,6 +759,16 @@ export function AppShell({
           </div>
         </div>
       </div>
+
+      {/* PROJECT NOTES & USER DIRECTORY MODAL */}
+      <ProjectNotesModal
+        isOpen={notesModalOpen}
+        onClose={() => setNotesModalOpen(false)}
+        projects={projects}
+        currentProjectId={currentProject.id}
+        initialTab={notesModalTab}
+        onToast={addToast}
+      />
 
       {/* TOAST STACK */}
       <div className="toast-stack">
