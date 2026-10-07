@@ -130,7 +130,11 @@ export function AppShell({
       if (e.key === "/") {
         e.preventDefault();
         setCmdkOpen(true);
+      } else if (e.key.toLowerCase() === "v") {
+        setNotesModalTab("passwords");
+        setNotesModalOpen(true);
       } else if (e.key.toLowerCase() === "n") {
+        setNotesModalTab("contacts");
         setNotesModalOpen(true);
       } else if (e.key.toLowerCase() === "i" && currentProject.id) {
         router.push(`/projects/${currentProject.id}`);
@@ -285,6 +289,43 @@ export function AppShell({
             <span className="nav-label">Analytics</span>
             <span className="nav-kbd">A</span>
           </Link>
+
+          {/* Side Drawer: Password Vault & Project Notes */}
+          <button
+            type="button"
+            className="nav-item"
+            onClick={() => {
+              setNotesModalTab("passwords");
+              setNotesModalOpen(true);
+            }}
+            title="Password Manager & Credentials Vault"
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <circle cx="7.5" cy="15.5" r="5.5" />
+              <path d="M21 2l-9.6 9.6" />
+              <path d="M15.5 7.5l3 3L22 7l-3-3" />
+            </svg>
+            <span className="nav-label">Password Vault</span>
+            <span className="nav-kbd">V</span>
+          </button>
+
+          <button
+            type="button"
+            className="nav-item"
+            onClick={() => {
+              setNotesModalTab("contacts");
+              setNotesModalOpen(true);
+            }}
+            title="Project Notes & Team Directory"
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" />
+              <rect x="8" y="2" width="8" height="4" rx="1" ry="1" />
+              <path d="M9 12h6M9 16h4" />
+            </svg>
+            <span className="nav-label">Project Notes</span>
+            <span className="nav-kbd">N</span>
+          </button>
 
           {isAdmin && (
             <>
