@@ -526,6 +526,20 @@ export function IssueWorkspace({
     return { score: "2.0", stars: "★★☆☆☆", label: "Low", level: "P4", className: "ok" };
   }
 
+  // Category sets for custom statuses
+  const customTodoKeys = useMemo(
+    () => new Set(customStatuses.filter((s) => s.category === "TODO").map((s) => s.key)),
+    [customStatuses]
+  );
+  const customInProgressKeys = useMemo(
+    () => new Set(customStatuses.filter((s) => s.category === "IN_PROGRESS").map((s) => s.key)),
+    [customStatuses]
+  );
+  const customDoneKeys = useMemo(
+    () => new Set(customStatuses.filter((s) => s.category === "DONE").map((s) => s.key)),
+    [customStatuses]
+  );
+
   // Filter visible issues
   const visibleIssues = useMemo(() => {
     return issues.filter((issue) => {
@@ -539,19 +553,33 @@ export function IssueWorkspace({
       const matchesStatus =
         filterStatus === "ALL" ||
         (filterStatus === "OPEN"
-          ? ["OPEN", "REPORTED", "READY_FOR_DEV"].includes(issue.status)
-          : filterStatus === "DEV_IN_PROGRESS"
-          ? ["DEV_IN_PROGRESS", "IN_PROGRESS"].includes(issue.status)
+          ? ["OPEN", "REPORTED", "READY_FOR_DEV", "TRIAGED"].includes(issue.status) || customTodoKeys.has(issue.status)
+          : filterStatus === "READY_FOR_DEV"
+          ? ["READY_FOR_DEV", "TRIAGED"].includes(issue.status)
+          : filterStatus === "DEV_IN_PROGRESS" || filterStatus === "IN_PROGRESS"
+          ? ["DEV_IN_PROGRESS", "IN_PROGRESS", "DEV_REVIEW", "QA_IN_PROGRESS"].includes(issue.status) || customInProgressKeys.has(issue.status)
+          : filterStatus === "DEV_REVIEW"
+          ? ["DEV_REVIEW"].includes(issue.status)
           : filterStatus === "DEV_COMPLETED"
           ? ["DEV_COMPLETED", "FIXED"].includes(issue.status)
+          : filterStatus === "DEV_DEPLOYED"
+          ? ["DEV_DEPLOYED"].includes(issue.status)
+          : filterStatus === "QA_IN_PROGRESS"
+          ? ["QA_IN_PROGRESS"].includes(issue.status)
           : filterStatus === "QA_DEPLOYED"
           ? ["QA_DEPLOYED", "VERIFIED"].includes(issue.status)
+          : filterStatus === "READY_FOR_RELEASE"
+          ? ["READY_FOR_RELEASE"].includes(issue.status)
+          : filterStatus === "PROD_DEPLOYED"
+          ? ["PROD_DEPLOYED"].includes(issue.status)
+          : filterStatus === "CLOSED"
+          ? ["CLOSED"].includes(issue.status)
           : filterStatus === "INVALID"
           ? ["INVALID"].includes(issue.status)
           : filterStatus === "REJECTED"
           ? ["REJECTED"].includes(issue.status)
           : filterStatus === "RESOLVED"
-          ? ["FIXED", "DEV_COMPLETED", "DEV_DEPLOYED", "QA_DEPLOYED", "READY_FOR_RELEASE", "PROD_DEPLOYED", "VERIFIED", "CLOSED"].includes(issue.status)
+          ? ["FIXED", "DEV_COMPLETED", "DEV_DEPLOYED", "QA_DEPLOYED", "READY_FOR_RELEASE", "PROD_DEPLOYED", "VERIFIED", "CLOSED"].includes(issue.status) || customDoneKeys.has(issue.status)
           : issue.status === filterStatus);
       const matchesMyTasks = !myTasksOnly || issue.assigneeId === currentUser.id;
       const matchesRaisedByMe =
@@ -562,7 +590,7 @@ export function IssueWorkspace({
 
       return matchesSeverity && matchesAssignee && matchesStatus && matchesMyTasks && matchesRaisedByMe;
     });
-  }, [issues, filterSeverity, filterAssignee, filterStatus, myTasksOnly, raisedByMeOnly, currentUser.id, currentUser.name]);
+  }, [issues, filterSeverity, filterAssignee, filterStatus, myTasksOnly, raisedByMeOnly, currentUser.id, currentUser.name, customTodoKeys, customInProgressKeys, customDoneKeys]);
 
   // Sort issues
   const sortedIssues = useMemo(() => {
@@ -595,14 +623,28 @@ export function IssueWorkspace({
   // Metrics
   const totalIssuesCount = issues.length;
   const openIssuesCount = issues.filter(
-    (i) => !["CLOSED", "INVALID", "REJECTED", "PROD_DEPLOYED", "FIXED", "VERIFIED"].includes(i.status)
+    (i) =>
+      ["OPEN", "REPORTED", "READY_FOR_DEV", "TRIAGED"].includes(i.status) ||
+      customTodoKeys.has(i.status)
   ).length;
   const criticalIssuesCount = issues.filter((i) => i.severity === "CRITICAL").length;
   const inProgressCount = issues.filter(
-    (i) => ["DEV_IN_PROGRESS", "IN_PROGRESS", "DEV_REVIEW", "QA_IN_PROGRESS"].includes(i.status)
+    (i) =>
+      ["DEV_IN_PROGRESS", "IN_PROGRESS", "DEV_REVIEW", "QA_IN_PROGRESS"].includes(i.status) ||
+      customInProgressKeys.has(i.status)
   ).length;
-  const resolvedCount = issues.filter((i) =>
-    ["FIXED", "VERIFIED", "DEV_COMPLETED", "DEV_DEPLOYED", "QA_DEPLOYED", "READY_FOR_RELEASE", "PROD_DEPLOYED", "CLOSED"].includes(i.status)
+  const resolvedCount = issues.filter(
+    (i) =>
+      [
+        "FIXED",
+        "VERIFIED",
+        "DEV_COMPLETED",
+        "DEV_DEPLOYED",
+        "QA_DEPLOYED",
+        "READY_FOR_RELEASE",
+        "PROD_DEPLOYED",
+        "CLOSED",
+      ].includes(i.status) || customDoneKeys.has(i.status)
   ).length;
   const myRaisedCount = useMemo(() => {
     return issues.filter(
@@ -639,10 +681,11 @@ export function IssueWorkspace({
       .filter(
         (i) =>
           (i.severity === "CRITICAL" || i.priority === "URGENT") &&
-          !["VERIFIED", "CLOSED"].includes(i.status)
+          !["VERIFIED", "CLOSED", "REJECTED", "INVALID", "PROD_DEPLOYED"].includes(i.status) &&
+          !customDoneKeys.has(i.status)
       )
       .slice(0, 3);
-  }, [issues]);
+  }, [issues, customDoneKeys]);
 
   // Image compression helper with HTML5 Canvas (max 1280px dimension, JPEG 82%)
   function compressImageFile(file: File): Promise<ImageUploadItem> {

@@ -187,15 +187,31 @@ export async function getSystemAnalyticsData(): Promise<SystemAnalyticsData> {
   ]);
 
   const customDoneKeys = new Set<string>();
+  const customInProgressKeys = new Set<string>();
+  const customTodoKeys = new Set<string>();
   customStatuses.forEach((cs) => {
     if (cs.category === "DONE") {
       customDoneKeys.add(cs.key);
+    } else if (cs.category === "IN_PROGRESS") {
+      customInProgressKeys.add(cs.key);
+    } else if (cs.category === "TODO") {
+      customTodoKeys.add(cs.key);
     }
   });
 
   const isResolvedOrClosed = (status: string) => {
     const s = status.toUpperCase();
-    return s === "FIXED" || s === "VERIFIED" || s === "CLOSED" || customDoneKeys.has(status);
+    return (
+      s === "FIXED" ||
+      s === "VERIFIED" ||
+      s === "CLOSED" ||
+      s === "DEV_COMPLETED" ||
+      s === "DEV_DEPLOYED" ||
+      s === "QA_DEPLOYED" ||
+      s === "READY_FOR_RELEASE" ||
+      s === "PROD_DEPLOYED" ||
+      customDoneKeys.has(status)
+    );
   };
 
   const totalUsers = users.length;
@@ -292,6 +308,7 @@ export async function getSystemAnalyticsData(): Promise<SystemAnalyticsData> {
 
     for (const issue of projIssues) {
       const st = issue.status;
+      const stUpper = st.toUpperCase();
       projStatusCounts[st] = (projStatusCounts[st] || 0) + 1;
       systemStatusCounts[st] = (systemStatusCounts[st] || 0) + 1;
 
@@ -342,17 +359,37 @@ export async function getSystemAnalyticsData(): Promise<SystemAnalyticsData> {
         pTester.byProject[proj.id].count++;
         pTester.bySeverity[sev] = (pTester.bySeverity[sev] || 0) + 1;
 
-        const stUpper = st.toUpperCase();
         if (stUpper === "CLOSED") {
           sysTester.byStatus.closed++;
           pTester.byStatus.closed++;
-        } else if (stUpper === "FIXED" || stUpper === "VERIFIED" || customDoneKeys.has(st)) {
+        } else if (
+          stUpper === "FIXED" ||
+          stUpper === "VERIFIED" ||
+          stUpper === "DEV_COMPLETED" ||
+          stUpper === "DEV_DEPLOYED" ||
+          stUpper === "QA_DEPLOYED" ||
+          stUpper === "READY_FOR_RELEASE" ||
+          stUpper === "PROD_DEPLOYED" ||
+          customDoneKeys.has(st)
+        ) {
           sysTester.byStatus.resolved++;
           pTester.byStatus.resolved++;
-        } else if (stUpper === "IN_PROGRESS") {
+        } else if (
+          stUpper === "IN_PROGRESS" ||
+          stUpper === "DEV_IN_PROGRESS" ||
+          stUpper === "DEV_REVIEW" ||
+          stUpper === "QA_IN_PROGRESS" ||
+          customInProgressKeys.has(st)
+        ) {
           sysTester.byStatus.inProgress++;
           pTester.byStatus.inProgress++;
-        } else {
+        } else if (
+          stUpper === "OPEN" ||
+          stUpper === "REPORTED" ||
+          stUpper === "READY_FOR_DEV" ||
+          stUpper === "TRIAGED" ||
+          customTodoKeys.has(st)
+        ) {
           sysTester.byStatus.open++;
           pTester.byStatus.open++;
         }
@@ -402,23 +439,43 @@ export async function getSystemAnalyticsData(): Promise<SystemAnalyticsData> {
           pDev.resolved++;
           sysDev.projectsMap[proj.id].resolved++;
           pDev.projectsMap[proj.id].resolved++;
-        } else {
+        } else if (stUpper !== "REJECTED" && stUpper !== "INVALID") {
           sysDev.active++;
           pDev.active++;
         }
       }
 
-      const stUpper = st.toUpperCase();
       if (stUpper === "CLOSED") {
         projClosed++;
         allClosedIssues++;
-      } else if (stUpper === "FIXED" || stUpper === "VERIFIED" || customDoneKeys.has(st)) {
+      } else if (
+        stUpper === "FIXED" ||
+        stUpper === "VERIFIED" ||
+        stUpper === "DEV_COMPLETED" ||
+        stUpper === "DEV_DEPLOYED" ||
+        stUpper === "QA_DEPLOYED" ||
+        stUpper === "READY_FOR_RELEASE" ||
+        stUpper === "PROD_DEPLOYED" ||
+        customDoneKeys.has(st)
+      ) {
         projResolved++;
         allResolvedIssues++;
-      } else if (stUpper === "IN_PROGRESS") {
+      } else if (
+        stUpper === "IN_PROGRESS" ||
+        stUpper === "DEV_IN_PROGRESS" ||
+        stUpper === "DEV_REVIEW" ||
+        stUpper === "QA_IN_PROGRESS" ||
+        customInProgressKeys.has(st)
+      ) {
         projInProgress++;
         allInProgressIssues++;
-      } else {
+      } else if (
+        stUpper === "OPEN" ||
+        stUpper === "REPORTED" ||
+        stUpper === "READY_FOR_DEV" ||
+        stUpper === "TRIAGED" ||
+        customTodoKeys.has(st)
+      ) {
         projOpen++;
         allOpenIssues++;
       }
