@@ -6,6 +6,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { signOut } from "next-auth/react";
 import { AnimatedBackground } from "@/components/ui/animated-background";
 import { ProjectNotesModal } from "./project-notes-modal";
+import { AISidebarWidget, AISettingsModal } from "./ai-settings-modal";
 
 type SimpleProject = {
   id: string;
@@ -43,8 +44,18 @@ export function AppShell({
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [notesModalOpen, setNotesModalOpen] = useState(false);
   const [notesModalTab, setNotesModalTab] = useState<"contacts" | "passwords" | "notes">("contacts");
+  const [aiModalOpen, setAiModalOpen] = useState(false);
   const wsRef = React.useRef<HTMLDivElement>(null);
   const userMenuRef = React.useRef<HTMLDivElement>(null);
+
+  // Listen for global open AI settings events
+  useEffect(() => {
+    function handleOpenAiSettings() {
+      setAiModalOpen(true);
+    }
+    window.addEventListener("open-beacon-ai-settings", handleOpenAiSettings);
+    return () => window.removeEventListener("open-beacon-ai-settings", handleOpenAiSettings);
+  }, []);
 
   // Extract active project from pathname e.g. /projects/[id]
   const pathSegments = pathname.split("/").filter(Boolean);
@@ -395,6 +406,12 @@ export function AppShell({
 
         <div className="sb-spacer" />
 
+        {/* Gemini AI Key & Quota Widget (On top of profile icon) */}
+        <AISidebarWidget
+          collapsed={collapsed}
+          onOpenModal={() => setAiModalOpen(true)}
+        />
+
         {/* User profile footer */}
         <div className="relative" ref={userMenuRef}>
           <div
@@ -476,6 +493,20 @@ export function AppShell({
               >
                 Progress & Activity Analytics
               </Link>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setUserMenuOpen(false);
+                  setAiModalOpen(true);
+                }}
+                className="w-full flex items-center gap-2 rounded-lg px-3 py-1.5 text-xs text-[#6366f1] hover:bg-[var(--surface-hover)] transition text-left font-semibold"
+              >
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
+                  <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
+                </svg>
+                Gemini AI Key & Quota
+              </button>
 
               <button
                 type="button"
@@ -809,6 +840,12 @@ export function AppShell({
         currentProjectId={currentProject.id}
         initialTab={notesModalTab}
         onToast={addToast}
+      />
+
+      {/* GEMINI AI KEY & QUOTA MODAL */}
+      <AISettingsModal
+        isOpen={aiModalOpen}
+        onClose={() => setAiModalOpen(false)}
       />
 
       {/* TOAST STACK */}

@@ -6,6 +6,7 @@ import { requireAuth } from "@/lib/auth";
 import { writeIssueHistory } from "@/lib/history";
 import { canTransition, type IssueStatus } from "@/lib/workflow";
 import { revalidatePath } from "next/cache";
+import { analyzeIssueWithAI, type AIProviderConfig } from "@/lib/ai";
 
 const imageItemSchema = z.object({
   filename: z.string(),
@@ -675,6 +676,110 @@ export async function getIssueAuditHistoryAction(issueId: string) {
     };
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : "Failed to load history";
+    return { success: false, error: message };
+  }
+}
+
+const analyzeIssueSchema = z.object({
+  projectId: z.string(),
+  description: z.string().trim().default(""),
+  images: z.array(imageItemSchema).max(10, "Maximum 10 screenshots allowed").default([]),
+  apiKeyOverride: z.string().trim().optional(),
+  providerOverride: z.enum(["gemini", "openai", "anthropic", "groq", "openrouter", "custom"]).optional(),
+  modelOverride: z.string().trim().optional(),
+});
+
+export async function analyzeIssueWithAIAction(data: z.infer<typeof analyzeIssueSchema>) {
+  try {
+    const session = await requireAuth();
+    const parsed = analyzeIssueSchema.safeParse(data);
+    if (!parsed.success) {
+      return {
+        success: false,
+        error: parsed.error.issues[0]?.message || "Invalid analysis request",
+      };
+    }
+
+    const { projectId, description, images, apiKeyOverride, providerOverride, modelOverride } = parsed.data;
+
+    if (!description && images.length === 0) {
+      return {
+        success: false,
+        error: "Please provide either a bug description or upload at least one screenshot.",
+      };
+    }
+
+    // Verify project access
+    const isAdmin = session.user.role === "ADMIN";
+    const membership = await prisma.projectMember.findUnique({
+      where: {
+        projectId_userId: {
+          projectId,
+          userId: session.user.id,
+        },
+      },
+    });
+
+    if (!isAdmin && !membership) {
+      return { success: false, error: "Access denied: You are not a member of this project" };
+    }
+
+    // Fetch project details for context
+    const project = await prisma.project.findUnique({
+      where: { id: projectId },
+      select: { id: true, name: true, key: true },
+    });
+
+    if (!project) {
+      return { success: false, error: "Project not found" };
+    }
+
+    // Fetch user record for stored Gemini API key and usage limits
+    const userRecord = await prisma.user.findUnique({
+      where: { id: session.user.id },
+      select: { geminiApiKey: true, aiUsageCount: true, aiUsageLimit: true },
+    });
+
+    const userKey = apiKeyOverride || userRecord?.geminiApiKey;
+
+    // Check usage limit if user has a limit configured
+    if (userRecord && userRecord.aiUsageLimit > 0 && userRecord.aiUsageCount >= userRecord.aiUsageLimit) {
+      return {
+        success: false,
+        error: `AI usage limit reached (${userRecord.aiUsageCount}/${userRecord.aiUsageLimit} calls). You can update your limit or reset usage from AI Settings on the sidebar.`,
+      };
+    }
+
+    let customConfig: AIProviderConfig | null = null;
+    if (userKey) {
+      customConfig = {
+        provider: providerOverride || "gemini",
+        apiKey: userKey,
+        model: modelOverride || "gemini-2.5-flash",
+      };
+    }
+
+    const analysis = await analyzeIssueWithAI({
+      description,
+      images,
+      projectContext: { name: project.name, key: project.key },
+      config: customConfig,
+    });
+
+    // Increment user's AI usage count upon successful analysis
+    if (userRecord) {
+      await prisma.user.update({
+        where: { id: session.user.id },
+        data: { aiUsageCount: { increment: 1 } },
+      });
+    }
+
+    return {
+      success: true,
+      data: analysis,
+    };
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "Failed to analyze issue with AI";
     return { success: false, error: message };
   }
 }
