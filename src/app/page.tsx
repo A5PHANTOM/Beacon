@@ -1,12 +1,8 @@
 import { redirect } from "next/navigation";
-import { getLoginSession } from "@/lib/auth";
-import { requiresPayment } from "@/lib/access-gate";
+import { getServerAuthSession } from "@/lib/auth";
 
 export default async function Home() {
-  const session = await getLoginSession();
-  if (requiresPayment(session?.user?.email)) {
-    redirect("/payment-required");
-  }
+  const session = await getServerAuthSession();
   if (session?.user) {
     redirect("/projects");
   } else {

@@ -44,7 +44,6 @@ async function main() {
     "next-auth": { getServerSession: async () => session },
     "next-auth/providers/credentials": { __esModule: true, default: (config) => config },
     "./db": { prisma },
-    "./access-gate": load("src/lib/access-gate.ts", {}),
   });
   const actions = load("src/app/(dashboard)/admin/users/actions.ts", {
     "@/lib/db": { prisma },

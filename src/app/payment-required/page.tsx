@@ -1,12 +1,9 @@
 import { redirect } from "next/navigation";
-import { getLoginSession } from "@/lib/auth";
-import { requiresPayment } from "@/lib/access-gate";
-import { PaymentRequiredScreen } from "@/components/navigation/payment-required-screen";
+import { getServerAuthSession } from "@/lib/auth";
 
 export default async function PaymentRequiredPage() {
-  const session = await getLoginSession();
+  const session = await getServerAuthSession();
   if (!session?.user) redirect("/login");
-  if (!requiresPayment(session.user.email)) redirect("/projects");
-
-  return <PaymentRequiredScreen />;
+  // Keep old bookmarks and open tabs working after the restriction was removed.
+  redirect("/projects");
 }
