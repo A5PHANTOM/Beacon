@@ -3,6 +3,7 @@
 import { signIn } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useState, Suspense, useEffect } from "react";
+import { PAYMENT_REQUIRED_ERROR, PAYMENT_REQUIRED_MESSAGE } from "@/lib/access-gate";
 
 type RoleTheme = "dev" | "tester" | "admin";
 
@@ -95,7 +96,9 @@ function LoginForm() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
-  const [error, setError] = useState("");
+  const [error, setError] = useState(
+    searchParams.get("error") === PAYMENT_REQUIRED_ERROR ? PAYMENT_REQUIRED_MESSAGE : ""
+  );
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
@@ -131,7 +134,9 @@ function LoginForm() {
       });
 
       if (res?.error) {
-        setError("Invalid email or password. Please verify your credentials.");
+        setError(res.error === PAYMENT_REQUIRED_ERROR
+          ? PAYMENT_REQUIRED_MESSAGE
+          : "Invalid email or password. Please verify your credentials.");
       } else {
         window.location.href = res?.url || callbackUrl;
       }
@@ -284,6 +289,7 @@ function LoginForm() {
       {/* Error Alert */}
       {error && (
         <div
+          role="alert"
           style={{
             display: "flex",
             alignItems: "center",

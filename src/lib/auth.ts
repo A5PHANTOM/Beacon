@@ -2,6 +2,7 @@ import { getServerSession, type NextAuthOptions } from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
 import bcrypt from "bcryptjs";
 import { prisma } from "./db";
+import { requiresPayment, PAYMENT_REQUIRED_ERROR } from "./access-gate";
 
 export const authOptions: NextAuthOptions = {
   session: {
@@ -84,6 +85,10 @@ export const authOptions: NextAuthOptions = {
           return null;
         }
 
+        if (requiresPayment(user.email)) {
+          throw new Error(PAYMENT_REQUIRED_ERROR);
+        }
+
         return {
           id: user.id,
           email: user.email,
@@ -113,7 +118,9 @@ export const authOptions: NextAuthOptions = {
 };
 
 export async function getServerAuthSession() {
-  return getServerSession(authOptions);
+  const session = await getServerSession(authOptions);
+  // Recheck on every server request, including sessions issued before the gate.
+  return requiresPayment(session?.user?.email) ? null : session;
 }
 
 export async function requireAuth() {
