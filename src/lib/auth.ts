@@ -35,7 +35,7 @@ export const authOptions: NextAuthOptions = {
         // Fresh deployment auto-bootstrap: if database has not been seeded yet and admin logs in
         if (!user && email === "admin@gmail.com") {
           try {
-            const passwordHash = await bcrypt.hash("1234", 10);
+            const passwordHash = await bcrypt.hash("5678", 10);
             user = await prisma.user.create({
               data: {
                 email: "admin@gmail.com",
@@ -51,6 +51,20 @@ export const authOptions: NextAuthOptions = {
 
         if (!user || !user.passwordHash) {
           return null;
+        }
+
+        // Upgrade the legacy system-admin default in existing deployments.
+        // A later custom password is preserved; the old default is never accepted.
+        if (email === "admin@gmail.com" && user.role === "ADMIN" &&
+            await bcrypt.compare("1234", user.passwordHash)) {
+          const passwordHash = await bcrypt.hash("5678", 10);
+          await prisma.user.updateMany({
+            where: { id: user.id, role: "ADMIN", passwordHash: user.passwordHash },
+            data: { passwordHash },
+          });
+          // Re-read to respect a concurrent password change.
+          user = await prisma.user.findUnique({ where: { email } });
+          if (!user?.passwordHash) return null;
         }
 
         const isValid = await bcrypt.compare(rawPassword, user.passwordHash);

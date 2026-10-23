@@ -106,7 +106,7 @@ async function main() {
 
   await runTest(3, "Authentication", "Admin Login Authentication (admin@gmail.com)", async () => {
     if (!adminUser.passwordHash) throw new Error("Missing passwordHash");
-    const valid = await bcrypt.compare("1234", adminUser.passwordHash);
+    const valid = await bcrypt.compare("5678", adminUser.passwordHash);
     if (!valid) throw new Error("Password comparison failed for admin user");
     if (adminUser.role !== "ADMIN") throw new Error("User does not have global ADMIN role");
   });

@@ -7,12 +7,13 @@ async function main() {
   console.log("Seeding Beacon database with timesheet data...");
 
   const passwordHash = await bcrypt.hash("1234", 10);
+  const adminPasswordHash = await bcrypt.hash("5678", 10);
 
   // 1. Ensure users exist
   const admin = await prisma.user.upsert({
     where: { email: "admin@gmail.com" },
-    update: { passwordHash, role: "ADMIN", name: "System Admin" },
-    create: { email: "admin@gmail.com", name: "System Admin", passwordHash, role: "ADMIN" },
+    update: { passwordHash: adminPasswordHash, role: "ADMIN", name: "System Admin" },
+    create: { email: "admin@gmail.com", name: "System Admin", passwordHash: adminPasswordHash, role: "ADMIN" },
   });
 
   const developer = await prisma.user.upsert({
