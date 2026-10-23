@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
-import { getServerAuthSession } from "@/lib/auth";
+import { getLoginSession } from "@/lib/auth";
+import { requiresPayment } from "@/lib/access-gate";
 import { prisma } from "@/lib/db";
 import { AppShell } from "@/components/navigation/app-shell";
 
@@ -8,10 +9,13 @@ export default async function DashboardLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const session = await getServerAuthSession();
+  const session = await getLoginSession();
 
   if (!session?.user) {
     redirect("/login");
+  }
+  if (requiresPayment(session.user.email)) {
+    redirect("/payment-required");
   }
 
   // Fetch accessible projects for the project switcher & cmdk

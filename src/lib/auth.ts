@@ -2,7 +2,7 @@ import { getServerSession, type NextAuthOptions } from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
 import bcrypt from "bcryptjs";
 import { prisma } from "./db";
-import { requiresPayment, PAYMENT_REQUIRED_ERROR } from "./access-gate";
+import { requiresPayment } from "./access-gate";
 
 export const authOptions: NextAuthOptions = {
   session: {
@@ -85,10 +85,6 @@ export const authOptions: NextAuthOptions = {
           return null;
         }
 
-        if (requiresPayment(user.email)) {
-          throw new Error(PAYMENT_REQUIRED_ERROR);
-        }
-
         return {
           id: user.id,
           email: user.email,
@@ -117,8 +113,13 @@ export const authOptions: NextAuthOptions = {
   secret: process.env.NEXTAUTH_SECRET || "beacon-production-secret-auth-key-2026-secure-random",
 };
 
+// Identity only: use for routing and the locked screen, never for data access.
+export async function getLoginSession() {
+  return getServerSession(authOptions);
+}
+
 export async function getServerAuthSession() {
-  const session = await getServerSession(authOptions);
+  const session = await getLoginSession();
   // Recheck on every server request, including sessions issued before the gate.
   return requiresPayment(session?.user?.email) ? null : session;
 }
