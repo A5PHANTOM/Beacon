@@ -1501,6 +1501,7 @@ export function IssueWorkspace({
           <span>Issue Title</span>
           <span>Tag</span>
           <span>Assignee</span>
+          <span>Reporter</span>
           <span
             style={{ cursor: "pointer", userSelect: "none" }}
             onClick={() => setSortBy((prev) => (prev === "NEWEST" ? "OLDEST" : "NEWEST"))}
@@ -1679,6 +1680,11 @@ export function IssueWorkspace({
                     </div>
                   )}
                 </div>
+
+                <span className="row-reporter" title={`Reporter: ${issue.reporterName || "Unknown"}`}>
+                  <span className="row-reporter-label">Reported by </span>
+                  {issue.reporterName || "Unknown"}
+                </span>
 
                 {/* Updated Relative Time */}
                 <span className="row-time">{formatTimeAgo(issue.updatedAt)}</span>
