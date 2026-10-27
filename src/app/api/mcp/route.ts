@@ -3,6 +3,9 @@ import { prisma } from "@/lib/db";
 import { canTransition, type IssueStatus } from "@/lib/workflow";
 import { writeIssueHistory } from "@/lib/history";
 import { z } from "zod";
+import { attemptGitHubSync } from "@/lib/github";
+import { can } from "@/lib/permissions";
+import type { GlobalRole, ProjectRole } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 
@@ -10,13 +13,13 @@ function authenticateRequest(req: NextRequest): boolean {
   const authHeader = req.headers.get("authorization");
   const apiKeyHeader = req.headers.get("x-beacon-api-key");
   const expectedKey =
-    process.env.BEACON_API_KEY || "beacon-mcp-secret-key-2026";
+    process.env.BEACON_API_KEY;
 
   const token = authHeader?.startsWith("Bearer ")
     ? authHeader.slice(7).trim()
     : apiKeyHeader?.trim();
 
-  return Boolean(token && token === expectedKey);
+  return Boolean(expectedKey && token && token === expectedKey);
 }
 
 async function resolveActorUser(req: NextRequest) {
@@ -486,6 +489,10 @@ export async function POST(req: NextRequest) {
       if (!issue) {
         return NextResponse.json({ error: "Issue not found" }, { status: 404 });
       }
+      const membership = await prisma.projectMember.findUnique({ where: { projectId_userId: { projectId: issue.projectId, userId: actorUser.id } } });
+      if (!can((membership?.roleInProject ?? "VIEWER") as ProjectRole, "issue:update", actorUser.role as GlobalRole)) {
+        return NextResponse.json({ error: "Permission denied" }, { status: 403 });
+      }
 
       // Check state machine transition
       if (!canTransition(issue.status as IssueStatus, newStatus)) {
@@ -520,6 +527,7 @@ export async function POST(req: NextRequest) {
         }
       });
 
+      await attemptGitHubSync(issue.id, actorUser.id);
       return NextResponse.json({
         success: true,
         issueId,
@@ -546,6 +554,10 @@ export async function POST(req: NextRequest) {
 
       if (!issue) {
         return NextResponse.json({ error: "Issue not found" }, { status: 404 });
+      }
+      const membership = await prisma.projectMember.findUnique({ where: { projectId_userId: { projectId: issue.projectId, userId: actorUser.id } } });
+      if (!can((membership?.roleInProject ?? "VIEWER") as ProjectRole, "issue:update", actorUser.role as GlobalRole)) {
+        return NextResponse.json({ error: "Permission denied" }, { status: 403 });
       }
 
       let finalStatus = issue.status;
@@ -593,6 +605,7 @@ export async function POST(req: NextRequest) {
         return commentRecord;
       });
 
+      await attemptGitHubSync(issue.id, actorUser.id);
       return NextResponse.json({
         success: true,
         issueId,

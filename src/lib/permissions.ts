@@ -1,6 +1,7 @@
 import type { GlobalRole, ProjectRole } from "./types";
 
 export type ProjectAction =
+  | "project:github"
   | "issue:create"
   | "issue:update"
   | "issue:delete"
@@ -8,6 +9,7 @@ export type ProjectAction =
   | "project:assign_members";
 
 const permissions: Record<ProjectAction, readonly ProjectRole[]> = {
+  "project:github": ["LEAD", "DEVELOPER"],
   "issue:create": ["LEAD", "DEVELOPER", "QA"],
   "issue:update": ["LEAD", "DEVELOPER", "QA"],
   "issue:delete": ["LEAD"],

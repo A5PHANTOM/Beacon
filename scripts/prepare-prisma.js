@@ -34,3 +34,11 @@ if (currentMatch && currentMatch[1] !== targetProvider) {
 } else {
   console.log(`[prepare-prisma] schema.prisma already configured for "${targetProvider}"`);
 }
+
+// Migration histories are provider-specific; the runtime client still uses schema.prisma.
+const postgresSchemaDir = path.join(__dirname, "..", "prisma", "postgresql");
+fs.mkdirSync(postgresSchemaDir, { recursive: true });
+fs.writeFileSync(
+  path.join(postgresSchemaDir, "schema.prisma"),
+  schema.replace(/provider\s*=\s*"(sqlite|postgresql)"/, 'provider = "postgresql"')
+);

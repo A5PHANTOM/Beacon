@@ -18,6 +18,7 @@ import { Pagination } from "@/components/ui/pagination";
 import { NewIssueModal } from "./new-issue-modal";
 
 export type WorkspaceIssue = {
+  githubIssueUrl?: string | null;
   id: string;
   projectId: string;
   number: number;
@@ -1909,6 +1910,7 @@ export function IssueWorkspace({
               <h2 className="issue-modal-title" id="drawerTitle">
                 {selected.title}
               </h2>
+              {selected.githubIssueUrl && <a href={selected.githubIssueUrl} target="_blank" rel="noreferrer" style={{ color: "var(--info)" }}>Open in GitHub ↗</a>}
             </div>
 
             {/* MODAL BODY (SPACIOUS 2-COLUMN LAYOUT) */}

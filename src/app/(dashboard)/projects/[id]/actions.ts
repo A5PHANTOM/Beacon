@@ -4,9 +4,13 @@ import { z } from "zod";
 import { prisma } from "@/lib/db";
 import { requireAuth } from "@/lib/auth";
 import { writeIssueHistory } from "@/lib/history";
-import { canTransition, type IssueStatus } from "@/lib/workflow";
+import { canTransition, issueStatuses, type IssueStatus } from "@/lib/workflow";
 import { revalidatePath } from "next/cache";
 import { analyzeIssueWithAI, type AIProviderConfig } from "@/lib/ai";
+
+import { attemptGitHubSync } from "@/lib/github";
+import { can } from "@/lib/permissions";
+import type { GlobalRole, ProjectRole } from "@/lib/types";
 
 const imageItemSchema = z.object({
   filename: z.string(),
@@ -65,7 +69,6 @@ export async function createIssueAction(data: z.infer<typeof createIssueSchema>)
     }
 
     // Verify project access
-    const isAdmin = session.user.role === "ADMIN";
     const membership = await prisma.projectMember.findUnique({
       where: {
         projectId_userId: {
@@ -75,7 +78,7 @@ export async function createIssueAction(data: z.infer<typeof createIssueSchema>)
       },
     });
 
-    if (!isAdmin && !membership) {
+    if (!can((membership?.roleInProject ?? "VIEWER") as ProjectRole, "issue:create", session.user.role as GlobalRole)) {
       return { success: false, error: "Access denied: You are not a member of this project" };
     }
 
@@ -156,6 +159,7 @@ export async function createIssueAction(data: z.infer<typeof createIssueSchema>)
       return issue;
     });
 
+    await attemptGitHubSync(newIssue.id, session.user.id);
     revalidatePath(`/projects/${projectId}`);
     return { success: true, data: newIssue };
   } catch (err: unknown) {
@@ -326,6 +330,9 @@ export async function updateIssueStatusAction(
 ) {
   try {
     const session = await requireAuth();
+    const parsed = z.object({ issueId: z.string().min(1), newStatus: z.string().min(1).max(100), notes: z.string().trim().max(10000).optional() }).safeParse({ issueId, newStatus, notes });
+    if (!parsed.success) return { success: false, error: "Invalid status update" };
+    ({ issueId, newStatus, notes } = parsed.data);
 
     const issue = await prisma.issue.findUnique({
       where: { id: issueId },
@@ -351,6 +358,11 @@ export async function updateIssueStatusAction(
       return { success: false, error: "Access denied: Not a member of this project" };
     }
 
+    if (!issueStatuses.includes(newStatus as IssueStatus)) {
+      const custom = await prisma.customStatus.findFirst({ where: { key: newStatus, OR: [{ projectId: null }, { projectId: issue.projectId }] } });
+      if (!custom) return { success: false, error: "Unknown status for this project" };
+    }
+
     // Role-specific workflow guards:
     // DEVELOPER and QA (Tester) can transition between pipeline statuses or custom statuses
     if (!isAdmin && (userRoleInProject === "DEVELOPER" || userRoleInProject === "QA")) {
@@ -371,8 +383,8 @@ export async function updateIssueStatusAction(
         "FIXED",
         "REJECTED",
       ];
-      const isCustom = await prisma.customStatus.findUnique({
-        where: { key: newStatus },
+      const isCustom = await prisma.customStatus.findFirst({
+        where: { key: newStatus, OR: [{ projectId: null }, { projectId: issue.projectId }] },
       });
       if (!allowedPipelineStatuses.includes(newStatus) && !isCustom) {
         return {
@@ -423,6 +435,7 @@ export async function updateIssueStatusAction(
       }
     });
 
+    await attemptGitHubSync(issue.id, session.user.id);
     revalidatePath(`/projects/${issue.projectId}`);
     return { success: true };
   } catch (err: unknown) {
@@ -447,6 +460,18 @@ export async function updateIssueDetailsAction(
 ) {
   try {
     const session = await requireAuth();
+    const parsed = z.object({
+      issueId: z.string().min(1),
+      updates: z.object({
+        title: z.string().trim().min(3).max(500).optional(), description: z.string().max(50000).optional(),
+        stepsToReproduce: z.string().max(50000).optional(), expected: z.string().max(50000).nullable().optional(),
+        actual: z.string().max(50000).nullable().optional(), environment: z.string().max(1000).nullable().optional(),
+        severity: z.enum(["UI", "BACKEND", "AI", "LOW", "MEDIUM", "HIGH", "CRITICAL"]).optional(),
+        priority: z.enum(["LOW", "MEDIUM", "HIGH", "URGENT"]).optional(), assigneeId: z.string().min(1).nullable().optional(),
+      }).strict(),
+    }).safeParse({ issueId, updates });
+    if (!parsed.success) return { success: false, error: parsed.error.issues[0].message };
+    ({ issueId, updates } = parsed.data);
 
     const issue = await prisma.issue.findUnique({
       where: { id: issueId },
@@ -465,14 +490,22 @@ export async function updateIssueDetailsAction(
       return { success: false, error: "Issue not found" };
     }
 
-    const isAdmin = session.user.role === "ADMIN";
     const userRoleInProject = issue.project.members[0]?.roleInProject;
 
-    if (!isAdmin && (!userRoleInProject || userRoleInProject === "VIEWER")) {
+    if (!can((userRoleInProject ?? "VIEWER") as ProjectRole, "issue:update", session.user.role as GlobalRole)) {
       return { success: false, error: "Permission denied" };
     }
 
+    if (updates.assigneeId) {
+      const member = await prisma.projectMember.findUnique({ where: { projectId_userId: { projectId: issue.projectId, userId: updates.assigneeId } } });
+      if (member?.roleInProject !== "DEVELOPER") return { success: false, error: "Assignee must be a developer in this project" };
+    }
     await prisma.$transaction(async (tx) => {
+      for (const field of ["description", "stepsToReproduce", "environment"] as const) {
+        if (updates[field] !== undefined && updates[field] !== issue[field]) {
+          await writeIssueHistory(tx, issueId, session.user.id, { fieldChanged: field, oldValue: issue[field], newValue: updates[field] });
+        }
+      }
       // Track history for each changed field
       if (updates.title && updates.title !== issue.title) {
         await writeIssueHistory(tx, issueId, session.user.id, {
@@ -547,6 +580,7 @@ export async function updateIssueDetailsAction(
       });
     });
 
+    await attemptGitHubSync(issue.id, session.user.id);
     revalidatePath(`/projects/${issue.projectId}`);
     return { success: true };
   } catch (err: unknown) {

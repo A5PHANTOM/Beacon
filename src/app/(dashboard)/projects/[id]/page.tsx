@@ -4,6 +4,10 @@ import { prisma } from "@/lib/db";
 import { IssueWorkspace, type WorkspaceIssue, type ProjectMemberItem } from "@/components/issues/workspace";
 import type { IssueStatus } from "@/lib/workflow";
 
+import { GitHubConnectionPanel } from "@/components/projects/github-connection";
+import { can } from "@/lib/permissions";
+import type { GlobalRole, ProjectRole } from "@/lib/types";
+
 type Props = {
   params: Promise<{ id: string }>;
 };
@@ -25,6 +29,7 @@ export default async function ProjectIssuesPage({ params }: Props) {
       ],
     },
     include: {
+      github: { select: { owner: true, repo: true, enabled: true } },
       members: {
         include: {
           user: {
@@ -56,6 +61,7 @@ export default async function ProjectIssuesPage({ params }: Props) {
     where: { projectId: project.id },
     orderBy: { number: "desc" },
     include: {
+      githubSync: true,
       reporter: {
         select: { name: true },
       },
@@ -69,6 +75,7 @@ export default async function ProjectIssuesPage({ params }: Props) {
   });
 
   const issues: WorkspaceIssue[] = rawIssues.map((i) => ({
+    githubIssueUrl: i.githubSync?.number && project.github ? `https://github.com/${encodeURIComponent(project.github.owner)}/${encodeURIComponent(project.github.repo)}/issues/${i.githubSync.number}` : null,
     id: i.id,
     projectId: i.projectId,
     number: i.number,
@@ -116,7 +123,11 @@ export default async function ProjectIssuesPage({ params }: Props) {
     description: s.description,
   }));
 
+  const pending = rawIssues.filter(i => !i.githubSync?.syncedAt || i.githubSync.lastError || i.githubSync.syncedAt < i.updatedAt);
+
   return (
+    <>
+    {can((userMembership?.roleInProject ?? "VIEWER") as ProjectRole, "project:github", session.user.role as GlobalRole) && <GitHubConnectionPanel projectId={project.id} connection={project.github} pending={pending.length} errors={pending.filter(i => i.githubSync?.lastError).map(i => ({ key: `${project.key}-${i.number}`, message: i.githubSync!.lastError! }))} />}
     <IssueWorkspace
       project={{
         id: project.id,
@@ -136,5 +147,6 @@ export default async function ProjectIssuesPage({ params }: Props) {
         roleInProject: userMembership?.roleInProject || (isAdmin ? "LEAD" : "VIEWER"),
       }}
     />
+    </>
   );
 }
