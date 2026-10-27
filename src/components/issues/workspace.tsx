@@ -151,6 +151,7 @@ export function IssueWorkspace({
   initialIssues,
   members,
   customStatuses = [],
+  integrationPanel,
   currentUser,
 }: {
   project: {
@@ -160,6 +161,7 @@ export function IssueWorkspace({
     description: string | null;
     createdAt?: string;
   };
+  integrationPanel?: React.ReactNode;
   initialIssues: WorkspaceIssue[];
   members: ProjectMemberItem[];
   customStatuses?: Array<{
@@ -1007,6 +1009,8 @@ export function IssueWorkspace({
             : `Here's what's happening across ${project.name} (${project.key}).`}
         </p>
       </div>
+
+      {integrationPanel}
 
       {/* 4 METRICS CARDS (Interactive Filter Controls) */}
       <div className="metrics">

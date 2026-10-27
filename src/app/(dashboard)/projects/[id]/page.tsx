@@ -126,9 +126,8 @@ export default async function ProjectIssuesPage({ params }: Props) {
   const pending = rawIssues.filter(i => !i.githubSync?.syncedAt || i.githubSync.lastError || i.githubSync.syncedAt < i.updatedAt);
 
   return (
-    <>
-    {can((userMembership?.roleInProject ?? "VIEWER") as ProjectRole, "project:github", session.user.role as GlobalRole) && <GitHubConnectionPanel projectId={project.id} connection={project.github} pending={pending.length} errors={pending.filter(i => i.githubSync?.lastError).map(i => ({ key: `${project.key}-${i.number}`, message: i.githubSync!.lastError! }))} />}
     <IssueWorkspace
+      integrationPanel={can((userMembership?.roleInProject ?? "VIEWER") as ProjectRole, "project:github", session.user.role as GlobalRole) && <GitHubConnectionPanel projectId={project.id} connection={project.github} pending={pending.length} errors={pending.filter(i => i.githubSync?.lastError).map(i => ({ key: `${project.key}-${i.number}`, message: i.githubSync!.lastError! }))} />}
       project={{
         id: project.id,
         name: project.name,
@@ -147,6 +146,5 @@ export default async function ProjectIssuesPage({ params }: Props) {
         roleInProject: userMembership?.roleInProject || (isAdmin ? "LEAD" : "VIEWER"),
       }}
     />
-    </>
   );
 }

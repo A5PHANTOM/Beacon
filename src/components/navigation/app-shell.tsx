@@ -48,6 +48,15 @@ export function AppShell({
   const wsRef = React.useRef<HTMLDivElement>(null);
   const userMenuRef = React.useRef<HTMLDivElement>(null);
 
+  // Keep the navigation rail compact on small screens without covering content.
+  useEffect(() => {
+    const viewport = window.matchMedia("(max-width: 960px)");
+    const updateSidebar = () => setCollapsed(viewport.matches);
+    updateSidebar();
+    viewport.addEventListener("change", updateSidebar);
+    return () => viewport.removeEventListener("change", updateSidebar);
+  }, []);
+
   // Listen for global open AI settings events
   useEffect(() => {
     function handleOpenAiSettings() {
@@ -93,11 +102,14 @@ export function AppShell({
 
   // Theme synchronization
   useEffect(() => {
-    const saved = localStorage.getItem("beacon_theme") as "light" | "dark" | null;
-    if (saved) {
-      setTheme(saved);
-      document.documentElement.setAttribute("data-theme", saved);
-    }
+    const frame = requestAnimationFrame(() => {
+      const saved = localStorage.getItem("beacon_theme") as "light" | "dark" | null;
+      if (saved) {
+        setTheme(saved);
+        document.documentElement.setAttribute("data-theme", saved);
+      }
+    });
+    return () => cancelAnimationFrame(frame);
   }, []);
 
   function handleSetTheme(t: "light" | "dark") {
