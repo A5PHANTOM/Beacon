@@ -1,6 +1,7 @@
 "use server";
 
 import { z } from "zod";
+import { resetUserEmailSchema, userEmailSchema } from "@/lib/user-validation";
 import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/db";
 import { requireAdmin } from "@/lib/auth";
@@ -135,12 +136,7 @@ export async function deleteUserAction(userId: string) {
 const updateUserDetailsSchema = z.object({
   userId: z.string().min(1, "User ID is required"),
   name: z.string().trim().min(2, "Name must be at least 2 characters"),
-  email: z
-    .string()
-    .trim()
-    .toLowerCase()
-    .min(1, "Email address is required")
-    .regex(emailRegex, "Please enter a valid email address (e.g. name@company.com)"),
+  email: userEmailSchema,
   role: z.enum(["ADMIN", "MEMBER"]),
 });
 
@@ -196,19 +192,18 @@ export async function updateUserDetailsAction(data: {
       }
     }
 
-    const updated = await prisma.user.update({
-      where: { id: userId },
-      data: {
-        name,
-        email,
-        role,
-      },
-      select: {
-        id: true,
-        name: true,
-        email: true,
-        role: true,
-      },
+    const emailChanged = email !== targetUser.email;
+    const updated = await prisma.$transaction(async tx => {
+      const changed = await tx.user.updateMany({
+        where: { id: userId, sessionVersion: targetUser.sessionVersion },
+        data: { name, email, role,
+          ...(emailChanged ? { githubId: null, githubLogin: null } : {}),
+          ...(emailChanged || role !== targetUser.role ? { sessionVersion: { increment: 1 } } : {}),
+        },
+      });
+      if (changed.count !== 1) throw new Error("Account changed while saving. Refresh and try again.");
+      if (emailChanged) await tx.gitHubIssueSync.updateMany({ where: { issue: { assigneeId: userId } }, data: { assignmentSynced: false, lastError: "GitHub assignment pending: the user's email changed. They must reconnect GitHub or the issue must be reassigned." } });
+      return tx.user.findUniqueOrThrow({ where: { id: userId }, select: { id: true, name: true, email: true, role: true, githubLogin: true } });
     });
 
     revalidatePath("/admin/users");
@@ -219,7 +214,7 @@ export async function updateUserDetailsAction(data: {
       data: updated,
     };
   } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : "Failed to update user details";
+    const message = err && typeof err === "object" && "code" in err && err.code === "P2002" ? "This email is already in use by another account." : "Could not update the account. Refresh and try again.";
     return { success: false, error: message };
   }
 }
@@ -270,3 +265,32 @@ export async function resetUserPasswordAction(data: {
   }
 }
 
+
+type ResetEmailResult = { success: true; data: { id: string; name: string; email: string; githubLogin: string | null } } | { success: false; error: string };
+export async function resetUserEmailAction(input: z.infer<typeof resetUserEmailSchema>): Promise<ResetEmailResult> {
+  try {
+    await requireAdmin();
+    const parsed = resetUserEmailSchema.safeParse(input);
+    if (!parsed.success) return { success: false, error: parsed.error.issues[0]?.message ?? "Invalid email change." };
+    const { userId, email, expectedEmail } = parsed.data;
+    const data = await prisma.$transaction(async tx => {
+      const user = await tx.user.findUnique({ where: { id: userId } });
+      if (!user) throw new Error("User not found.");
+      if (user.email !== expectedEmail) throw new Error("This email was changed by another administrator. Refresh and try again.");
+      if (user.email === email) throw new Error("Enter a different email address.");
+      const duplicate = await tx.user.findUnique({ where: { email }, select: { id: true } });
+      if (duplicate) throw new Error("This email is already in use by another account.");
+      const changed = await tx.user.updateMany({ where: { id: userId, email: expectedEmail, sessionVersion: user.sessionVersion }, data: { email, githubId: null, githubLogin: null, sessionVersion: { increment: 1 } } });
+      if (changed.count !== 1) throw new Error("Account changed while saving. Refresh and try again.");
+      await tx.gitHubIssueSync.updateMany({ where: { issue: { assigneeId: userId } }, data: { assignmentSynced: false, lastError: "GitHub assignment pending: the user's email changed. They must reconnect GitHub or the issue must be reassigned." } });
+      return tx.user.findUniqueOrThrow({ where: { id: userId }, select: { id: true, name: true, email: true, githubLogin: true } });
+    });
+    revalidatePath("/admin/users");
+    revalidatePath("/projects", "layout");
+    return { success: true, data };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "";
+    const code = error && typeof error === "object" && "code" in error ? error.code : null;
+    return { success: false, error: code === "P2002" ? "This email is already in use by another account." : /^(User not found|This email|Enter a different|Account changed)/.test(message) ? message : "Could not change the email. Check your administrator permissions and retry." };
+  }
+}

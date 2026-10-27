@@ -15,6 +15,8 @@ import {
 } from "@/app/(dashboard)/projects/[id]/actions";
 import { useRouter } from "next/navigation";
 import { Pagination } from "@/components/ui/pagination";
+import { useProjectAssignees } from "./use-project-assignees";
+import { AssigneeListNotice } from "./developer-assignees";
 import { NewIssueModal } from "./new-issue-modal";
 
 export type WorkspaceIssue = {
@@ -152,6 +154,7 @@ export function IssueWorkspace({
   members,
   customStatuses = [],
   integrationPanel,
+  assignmentConnectionKey = "",
   currentUser,
 }: {
   project: {
@@ -162,6 +165,7 @@ export function IssueWorkspace({
     createdAt?: string;
   };
   integrationPanel?: React.ReactNode;
+  assignmentConnectionKey?: string;
   initialIssues: WorkspaceIssue[];
   members: ProjectMemberItem[];
   customStatuses?: Array<{
@@ -223,6 +227,15 @@ export function IssueWorkspace({
 
   // New Issue modal
   const [isNewOpen, setIsNewOpen] = useState(false);
+  const assigneeChoices = useProjectAssignees(project.id, assignmentConnectionKey);
+  const refreshAssignees = assigneeChoices.refresh;
+  const [assigning, setAssigning] = useState(false);
+  useEffect(() => {
+    if (isNewOpen || openRowAssigneeId || drawerAssigneeOpen || footerAssignOpen) {
+      const scheduled = setTimeout(() => { void refreshAssignees(); }, 0);
+      return () => clearTimeout(scheduled);
+    }
+  }, [isNewOpen, openRowAssigneeId, drawerAssigneeOpen, footerAssignOpen, refreshAssignees]);
   type ImageUploadItem = {
     id: string;
     filename: string;
@@ -860,12 +873,19 @@ export function IssueWorkspace({
           }
         });
       }
-      showToast(`Status updated to ${getStatusLabel(nextStatus)}`);
+      showToast(res.warning || `Status updated to ${getStatusLabel(nextStatus)}`);
       router.refresh();
     }
   }
 
   async function handleReassign(issueId: string, newAssigneeId: string) {
+    if (assigning) return;
+    if (newAssigneeId && (assigneeChoices.loading || assigneeChoices.error || !assigneeChoices.developers.some(developer => developer.userId === newAssigneeId))) {
+      showToast("Refresh assignable developers before choosing a person.");
+      return;
+    }
+    setAssigning(true);
+    try {
     const res = await updateIssueDetailsAction(issueId, {
       assigneeId: newAssigneeId || null,
     });
@@ -873,7 +893,7 @@ export function IssueWorkspace({
     if (!res.success) {
       showToast(res.error || "Failed to reassign");
     } else {
-      const assigned = members.find((m) => m.userId === newAssigneeId);
+      const assigned = assigneeChoices.developers.find(developer => developer.userId === newAssigneeId) ?? members.find((m) => m.userId === newAssigneeId);
       const newName = assigned?.name || "Unassigned";
       setSelected((prev) =>
         prev && prev.id === issueId
@@ -892,9 +912,11 @@ export function IssueWorkspace({
           if (r.success && r.data) setAuditHistory(r.data.history);
         });
       }
-      showToast(`Assigned to ${newName}`);
+      showToast(res.warning || `Assigned to ${newName}`);
       router.refresh();
     }
+    } catch { showToast("Could not save the assignment. Please retry."); }
+    finally { setAssigning(false); }
   }
 
   async function handleUpdatePriority(newPriVal: "LOW" | "MEDIUM" | "HIGH" | "URGENT") {
@@ -1657,7 +1679,8 @@ export function IssueWorkspace({
                         </div>
                         Unassigned
                       </div>
-                      {developers.map((d) => (
+                      <AssigneeListNotice choices={assigneeChoices} />
+                      {assigneeChoices.developers.map((d) => (
                         <div
                           key={d.userId}
                           className="dd-item"
@@ -1678,7 +1701,7 @@ export function IssueWorkspace({
                             {d.name.charAt(0)}
                           </div>
                           <span>
-                            {d.name} {d.roleInProject === "LEAD" ? "(Lead)" : ""}
+                            {d.name}{d.githubLogin ? ` · @${d.githubLogin}` : ""}
                           </span>
                         </div>
                       ))}
@@ -2487,7 +2510,8 @@ export function IssueWorkspace({
                         </div>
                         Unassigned
                       </div>
-                      {developers.map((d) => (
+                      <AssigneeListNotice choices={assigneeChoices} />
+                      {assigneeChoices.developers.map((d) => (
                         <div
                           key={d.userId}
                           className="dd-item"
@@ -2500,7 +2524,7 @@ export function IssueWorkspace({
                             {d.name.charAt(0)}
                           </div>
                           <span>
-                            {d.name} {d.roleInProject === "LEAD" ? "(Lead)" : ""}
+                            {d.name}{d.githubLogin ? ` · @${d.githubLogin}` : ""}
                           </span>
                         </div>
                       ))}
@@ -2610,7 +2634,8 @@ export function IssueWorkspace({
                       </div>
                       <span>Unassigned</span>
                     </button>
-                    {developers.map((d) => (
+                    <AssigneeListNotice choices={assigneeChoices} />
+                      {assigneeChoices.developers.map((d) => (
                       <button
                         key={d.userId}
                         type="button"
@@ -2625,7 +2650,7 @@ export function IssueWorkspace({
                           {d.name.charAt(0)}
                         </div>
                         <span>
-                          {d.name} {d.roleInProject === "LEAD" ? "(Lead)" : ""}
+                          {d.name}{d.githubLogin ? ` · @${d.githubLogin}` : ""}
                         </span>
                       </button>
                     ))}
@@ -2721,6 +2746,7 @@ export function IssueWorkspace({
           name: project.name,
         }}
         members={members}
+        assigneeChoices={assigneeChoices}
         currentUser={currentUser}
         onIssueCreated={(createdIssue) => {
           setIssues((prev) => [createdIssue, ...prev]);

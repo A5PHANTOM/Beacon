@@ -8,9 +8,16 @@ import { canTransition, issueStatuses, type IssueStatus } from "@/lib/workflow";
 import { revalidatePath } from "next/cache";
 import { analyzeIssueWithAI, type AIProviderConfig } from "@/lib/ai";
 
+import { validateProjectAssignee } from "@/lib/project-assignees";
 import { attemptGitHubSync } from "@/lib/github";
 import { can } from "@/lib/permissions";
 import type { GlobalRole, ProjectRole } from "@/lib/types";
+
+function issueMutationError(error: unknown, fallback: string) {
+  if (error instanceof Error && /^(Issue changed while saving|Could not reserve an issue number)/.test(error.message)) return error.message;
+  if (error instanceof Error && error.message === "UNAUTHORIZED") return "Please sign in again.";
+  return fallback;
+}
 
 const imageItemSchema = z.object({
   filename: z.string(),
@@ -82,24 +89,12 @@ export async function createIssueAction(data: z.infer<typeof createIssueSchema>)
       return { success: false, error: "Access denied: You are not a member of this project" };
     }
 
-    // Verify assigned user is a developer in this project
-    const assigneeMember = await prisma.projectMember.findUnique({
-      where: {
-        projectId_userId: {
-          projectId,
-          userId: assigneeId,
-        },
-      },
-    });
+    try { await validateProjectAssignee(projectId, assigneeId); }
+    catch { return { success: false, error: "Selected developer is not assignable. Refresh the developer list and check their Beacon membership and GitHub repository access." }; }
 
-    if (!assigneeMember || assigneeMember.roleInProject !== "DEVELOPER") {
-      return {
-        success: false,
-        error: "Mandatory assignment: Please select an active developer member of this project",
-      };
-    }
-
-    // Determine next issue number atomically
+    // Retry issue-number collisions from concurrent creates. Each attempt is atomic.
+    const newIssue = await (async () => {
+      for (let attempt = 0; attempt < 3; attempt++) {
     const latestIssue = await prisma.issue.findFirst({
       where: { projectId },
       orderBy: { number: "desc" },
@@ -108,7 +103,7 @@ export async function createIssueAction(data: z.infer<typeof createIssueSchema>)
     const nextNumber = (latestIssue?.number || 0) + 1;
 
     // Create issue, attachments (if provided), and history in transaction
-    const newIssue = await prisma.$transaction(async (tx) => {
+    try { return await prisma.$transaction(async (tx) => {
       const issue = await tx.issue.create({
         data: {
           projectId,
@@ -158,12 +153,20 @@ export async function createIssueAction(data: z.infer<typeof createIssueSchema>)
 
       return issue;
     });
+    } catch (error) {
+      const code = error && typeof error === "object" && "code" in error ? error.code : null;
+      if (attempt < 2 && (code === "P2002" || code === "P2028")) continue;
+      throw error;
+    }
+      }
+      throw new Error("Could not reserve an issue number. Please retry.");
+    })();
 
-    await attemptGitHubSync(newIssue.id, session.user.id);
+    const warning = await attemptGitHubSync(newIssue.id, session.user.id);
     revalidatePath(`/projects/${projectId}`);
-    return { success: true, data: newIssue };
+    return { success: true, data: newIssue, warning };
   } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : "Failed to create issue";
+    const message = issueMutationError(err, "Failed to create issue. Please refresh and try again.");
     return { success: false, error: message };
   }
 }
@@ -408,10 +411,11 @@ export async function updateIssueStatusAction(
 
     // Apply update and audit record in transaction
     await prisma.$transaction(async (tx) => {
-      await tx.issue.update({
-        where: { id: issueId },
+      const changed = await tx.issue.updateMany({
+        where: { id: issueId, updatedAt: issue.updatedAt },
         data: { status: newStatus },
       });
+      if (changed.count !== 1) throw new Error("Issue changed while saving. Refresh and try again.");
 
       await writeIssueHistory(tx, issueId, session.user.id, {
         fieldChanged: "status",
@@ -435,11 +439,11 @@ export async function updateIssueStatusAction(
       }
     });
 
-    await attemptGitHubSync(issue.id, session.user.id);
+    const warning = await attemptGitHubSync(issue.id, session.user.id);
     revalidatePath(`/projects/${issue.projectId}`);
-    return { success: true };
+    return { success: true, warning };
   } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : "Failed to update status";
+    const message = issueMutationError(err, "Failed to update status. Please refresh and try again.");
     return { success: false, error: message };
   }
 }
@@ -497,8 +501,8 @@ export async function updateIssueDetailsAction(
     }
 
     if (updates.assigneeId) {
-      const member = await prisma.projectMember.findUnique({ where: { projectId_userId: { projectId: issue.projectId, userId: updates.assigneeId } } });
-      if (member?.roleInProject !== "DEVELOPER") return { success: false, error: "Assignee must be a developer in this project" };
+      try { await validateProjectAssignee(issue.projectId, updates.assigneeId); }
+      catch { return { success: false, error: "Selected developer is not assignable. Refresh the list and check their Beacon membership and GitHub repository access." }; }
     }
     await prisma.$transaction(async (tx) => {
       for (const field of ["description", "stepsToReproduce", "environment"] as const) {
@@ -559,13 +563,13 @@ export async function updateIssueDetailsAction(
 
         await writeIssueHistory(tx, issueId, session.user.id, {
           fieldChanged: "assignee",
-          oldValue: issue.assigneeId ? "Previous Assignee" : "Unassigned",
+          oldValue: issue.assigneeId ? (await tx.user.findUnique({ where: { id: issue.assigneeId }, select: { name: true } }))?.name ?? "Previous developer" : "Unassigned",
           newValue: assigneeName,
         });
       }
 
-      await tx.issue.update({
-        where: { id: issueId },
+      const changed = await tx.issue.updateMany({
+        where: { id: issueId, updatedAt: issue.updatedAt },
         data: {
           title: updates.title ?? undefined,
           description: updates.description ?? undefined,
@@ -578,13 +582,14 @@ export async function updateIssueDetailsAction(
           assigneeId: updates.assigneeId === undefined ? undefined : updates.assigneeId,
         },
       });
+      if (changed.count !== 1) throw new Error("Issue changed while saving. Refresh and try again.");
     });
 
-    await attemptGitHubSync(issue.id, session.user.id);
+    const warning = await attemptGitHubSync(issue.id, session.user.id);
     revalidatePath(`/projects/${issue.projectId}`);
-    return { success: true };
+    return { success: true, warning };
   } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : "Failed to update issue";
+    const message = issueMutationError(err, "Failed to update issue. Please refresh and try again.");
     return { success: false, error: message };
   }
 }

@@ -1,0 +1,14 @@
+.group { margin-top: 22px; }
+.divider { display: flex; align-items: center; gap: 12px; margin-bottom: 18px; color: #94a3b8; font-size: 11px; }
+.divider span { height: 1px; flex: 1; background: #e2e8f0; }
+.button { display: flex; align-items: center; justify-content: center; gap: 10px; width: 100%; min-height: 44px; padding: 11px 16px; border: 1px solid #1e293b; border-radius: 8px; background: #17202e; color: #fff; font: 600 13px/1.5 'Inter', sans-serif; cursor: pointer; transition: background .15s, opacity .15s; }
+.button:hover { background: #0f172a; }
+.button:focus-visible, .retry:focus-visible { outline: 3px solid #93c5fd; outline-offset: 3px; }
+.button:disabled { cursor: not-allowed; opacity: .5; }
+.button svg { flex-shrink: 0; }
+.hint { margin: 10px 0 0; color: #64748b; font-size: 11px; line-height: 1.65; text-align: center; }
+.retry { display: inline-flex; align-items: center; gap: 4px; border: 0; background: none; color: #0f7a73; font: inherit; font-weight: 600; cursor: pointer; }
+.error { margin: 10px 0 0; color: #991b1b; font-size: 12px; line-height: 1.6; }
+.spinner { animation: spin 1s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .spinner { animation: none; } }

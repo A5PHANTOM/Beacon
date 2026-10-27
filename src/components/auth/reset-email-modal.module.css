@@ -1,0 +1,21 @@
+.overlay { position: fixed; inset: 0; z-index: 100; display: grid; place-items: center; padding: 20px; background: var(--overlay); backdrop-filter: blur(4px); }
+.dialog { width: 100%; max-width: 460px; max-height: 90dvh; overflow-y: auto; border: 1px solid var(--border); border-radius: 16px; padding: 25px; background: var(--surface); color: var(--text); box-shadow: var(--shadow-lg); }
+.header { display: flex; align-items: center; gap: 12px; }
+.icon { display: grid; place-items: center; width: 40px; height: 40px; border: 1px solid var(--border); border-radius: 10px; background: var(--accent-soft); color: var(--accent); }
+.header h2 { margin: 0; font-size: 16px; font-weight: 650; letter-spacing: -.025em; }
+.header p { margin: 4px 0 0; color: var(--text-dim); font-size: 12px; }
+.header button { display: grid; place-items: center; width: 30px; height: 30px; margin-left: auto; border: 0; border-radius: 6px; background: transparent; color: var(--text-dim); cursor: pointer; }
+.header button:hover { background: var(--surface-2); }
+.description { margin: 21px 0; color: var(--text-dim); font-size: 12px; line-height: 1.8; }
+.field { display: grid; gap: 8px; font-size: 12px; font-weight: 600; }
+.field input { width: 100%; min-height: 42px; padding: 9px 12px; border: 1px solid var(--border-strong); border-radius: 8px; outline: none; background: var(--surface); color: var(--text); font: 400 14px/1.5 'Inter', sans-serif; }
+.field input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft-2); }
+.note { margin-top: 16px; padding: 12px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface-2); color: var(--text-dim); font-size: 11px; line-height: 1.8; }
+.error { margin: 12px 0 0; color: var(--crit); font-size: 12px; line-height: 1.6; }
+.footer { display: flex; justify-content: flex-end; gap: 9px; margin-top: 23px; padding-top: 18px; border-top: 1px solid var(--border); }
+.footer button { min-height: 38px; padding: 9px 14px; border: 1px solid var(--border); border-radius: 7px; font-size: 12px; font-weight: 600; cursor: pointer; }
+.cancel { background: var(--surface); color: var(--text-dim); }
+.save { background: var(--accent); color: var(--accent-ink); }
+.dialog button:disabled { opacity: .5; cursor: not-allowed; }
+.dialog button:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+@media (max-width: 480px) { .dialog { padding: 20px; } .field input { font-size: 16px; } }

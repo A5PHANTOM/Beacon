@@ -39,15 +39,16 @@ global.fetch = async (url, options = {}) => {
   const body = options.body ? JSON.parse(options.body) : {};
   let result;
   if (parsed.pathname === '/repos/acme/app') result = { has_issues: true };
+  else if (parsed.pathname.endsWith('/assignees')) result = [{ id: 101, login: 'dev' }, { id: 102, login: 'dev2' }];
   else if (parsed.pathname.endsWith('/comments')) {
     if (method === 'POST') { comments.push(body); result = body; } else result = comments;
   } else if (method === 'POST') { result = { ...body, number: remote.length + 1, state: 'open' }; remote.push(result); }
-  else if (method === 'PATCH') { result = remote.find(i => i.number === Number(parsed.pathname.split('/').pop())); Object.assign(result, body); }
+  else if (method === 'PATCH') { result = remote.find(i => i.number === Number(parsed.pathname.split('/').pop())); Object.assign(result, body); result.assignees = (body.assignees ?? []).map(login => ({ id: login === 'dev' ? 101 : 102, login })); }
   else result = remote;
   return Response.json(result);
 };
 async function main() {
-  for (const [id, role] of [['dev', 'MEMBER'], ['dev2', 'MEMBER'], ['viewer', 'MEMBER'], ['outsider', 'MEMBER'], ['qa', 'MEMBER']]) await prisma.user.create({ data: { id, name: id, email: `${id}@test.local`, passwordHash: 'unused', role } });
+  for (const [id, role] of [['dev', 'MEMBER'], ['dev2', 'MEMBER'], ['viewer', 'MEMBER'], ['outsider', 'MEMBER'], ['qa', 'MEMBER']]) await prisma.user.create({ data: { id, name: id, email: `${id}@test.local`, passwordHash: 'unused', role, ...(id === 'dev' ? { githubId: '101', githubLogin: 'dev' } : id === 'dev2' ? { githubId: '102', githubLogin: 'dev2' } : {}) } });
   await prisma.project.create({ data: { id: 'p', key: 'TEST', name: 'Test', createdById: 'dev', members: { create: [{ userId: 'dev', roleInProject: 'DEVELOPER' }, { userId: 'dev2', roleInProject: 'DEVELOPER' }, { userId: 'viewer', roleInProject: 'VIEWER' }, { userId: 'qa', roleInProject: 'QA' }] } } });
   const login = id => session = { user: { id, role: 'MEMBER' } };
   const config = { projectId: 'p', owner: 'acme', repo: 'app', token: 'secret-token' };

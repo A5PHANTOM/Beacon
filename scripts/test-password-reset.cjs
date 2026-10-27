@@ -21,6 +21,7 @@ async function main() {
   let user;
   let writes = 0;
   const prisma = { user: {
+    count: async () => user ? 1 : 0,
     findUnique: async ({ where }) => user && (where.id === user.id || where.email === user.email) ? { ...user } : null,
     create: async ({ data }) => {
       user = { id: "bootstrap", ...data };
@@ -43,9 +44,11 @@ async function main() {
   const auth = load("src/lib/auth.ts", {
     "next-auth": { getServerSession: async () => session },
     "next-auth/providers/credentials": { __esModule: true, default: (config) => config },
+    "./github-login": { resolveGitHubLogin: async () => { throw new Error("Unexpected OAuth callback"); }, GitHubLoginFailure: class extends Error {} },
     "./db": { prisma },
   });
   const actions = load("src/app/(dashboard)/admin/users/actions.ts", {
+    "@/lib/user-validation": load("src/lib/user-validation.ts", {}),
     "@/lib/db": { prisma },
     "@/lib/auth": { requireAdmin: auth.requireAdmin },
     "next/cache": { revalidatePath: () => {} },

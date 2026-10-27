@@ -527,9 +527,10 @@ export async function POST(req: NextRequest) {
         }
       });
 
-      await attemptGitHubSync(issue.id, actorUser.id);
+      const warning = await attemptGitHubSync(issue.id, actorUser.id);
       return NextResponse.json({
         success: true,
+        warning,
         issueId,
         previousStatus: issue.status,
         newStatus,
@@ -605,9 +606,10 @@ export async function POST(req: NextRequest) {
         return commentRecord;
       });
 
-      await attemptGitHubSync(issue.id, actorUser.id);
+      const warning = await attemptGitHubSync(issue.id, actorUser.id);
       return NextResponse.json({
         success: true,
+        warning,
         issueId,
         commentId: comment.id,
         status: finalStatus,

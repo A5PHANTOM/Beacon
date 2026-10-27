@@ -50,6 +50,7 @@ export default async function AdminUsersPage() {
     id: u.id,
     name: u.name,
     email: u.email,
+    githubLogin: u.githubLogin,
     role: u.role,
     createdAt: u.createdAt.toISOString(),
     memberships: u.memberships.map((m) => ({

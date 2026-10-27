@@ -1,8 +1,10 @@
 "use client";
 
+import Image from "next/image";
+import { GitHubSignIn } from "@/components/auth/github-sign-in";
 import { signIn } from "next-auth/react";
-import { useRouter, useSearchParams } from "next/navigation";
-import { useState, Suspense, useEffect } from "react";
+import { useSearchParams } from "next/navigation";
+import { useState, Suspense } from "react";
 
 type RoleTheme = "dev" | "tester" | "admin";
 
@@ -82,8 +84,19 @@ function RoleIcon({ role }: { role: RoleTheme }) {
   );
 }
 
+const oauthErrors: Record<string, string> = {
+  GitHubNoBeaconAccount: "No existing Beacon account matches your verified GitHub emails. Ask an administrator to add your account first.",
+  GitHubEmailUnavailable: "We couldn’t verify your GitHub email. Verify your Beacon email in GitHub settings and allow email access, then try again.",
+  GitHubAccountConflict: "This GitHub account cannot be linked automatically. Please use your Beacon password and contact an administrator.",
+  GitHubIdentityInvalid: "GitHub identity verification failed. Please try again.",
+  GitHubSignInFailed: "GitHub sign-in couldn’t finish. Please try again or use your Beacon password.",
+  OAuthSignin: "Couldn’t start GitHub sign-in. Please try again.",
+  OAuthCallback: "GitHub sign-in was interrupted or couldn’t be verified. Please try again.",
+  AccessDenied: "GitHub sign-in was cancelled or access was denied.",
+  Configuration: "GitHub sign-in is not configured correctly. Please contact an administrator.",
+};
+
 function LoginForm() {
-  const router = useRouter();
   const searchParams = useSearchParams();
   const callbackUrl = searchParams.get("callbackUrl") || "/projects";
 
@@ -98,13 +111,9 @@ function LoginForm() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
-  useEffect(() => {
-    if (initialRoleParam && ROLES[initialRoleParam]) {
-      setActiveRole(initialRoleParam);
-    }
-  }, [initialRoleParam]);
-
   const current = ROLES[activeRole];
+  const oauthError = searchParams.get("error");
+  const visibleError = error || (oauthError ? oauthErrors[oauthError] ?? "Sign-in couldn’t finish. Please try again." : "");
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -171,7 +180,9 @@ function LoginForm() {
             boxShadow: "0 4px 14px rgba(15, 23, 42, 0.12)",
           }}
         >
-          <img
+          <Image
+            width={52}
+            height={52}
             src="/logo.png"
             alt="Beacon Logo"
             style={{ width: "100%", height: "100%", objectFit: "cover" }}
@@ -282,7 +293,7 @@ function LoginForm() {
       </div>
 
       {/* Error Alert */}
-      {error && (
+      {visibleError && (
         <div
           role="alert"
           style={{
@@ -304,7 +315,7 @@ function LoginForm() {
             <line x1="12" y1="8" x2="12" y2="12" />
             <line x1="12" y1="16" x2="12.01" y2="16" />
           </svg>
-          <span>{error}</span>
+          <span>{visibleError}</span>
         </div>
       )}
 
@@ -476,6 +487,8 @@ function LoginForm() {
         </button>
       </form>
 
+      <GitHubSignIn callbackUrl={callbackUrl} disabled={loading} />
+
       {/* Card Footer */}
       <div
         style={{
@@ -508,6 +521,7 @@ export default function LoginPage() {
 }
 
 function LoginPageContent() {
+  const searchParams = useSearchParams();
   return (
     <div
       style={{
@@ -523,7 +537,7 @@ function LoginPageContent() {
         position: "relative",
       }}
     >
-      <LoginForm />
+      <LoginForm key={searchParams.get("role") ?? "dev"} />
     </div>
   );
 }

@@ -1,4 +1,6 @@
 import { getServerSession, type NextAuthOptions } from "next-auth";
+import GitHubProvider from "next-auth/providers/github";
+import { GitHubLoginFailure, resolveGitHubLogin } from "./github-login";
 import CredentialsProvider from "next-auth/providers/credentials";
 import bcrypt from "bcryptjs";
 import { prisma } from "./db";
@@ -32,7 +34,7 @@ export const authOptions: NextAuthOptions = {
         });
 
         // Fresh deployment auto-bootstrap: if database has not been seeded yet and admin logs in
-        if (!user && email === "admin@gmail.com") {
+        if (!user && email === "admin@gmail.com" && await prisma.user.count() === 0) {
           try {
             const passwordHash = await bcrypt.hash("5678", 10);
             user = await prisma.user.create({
@@ -76,15 +78,55 @@ export const authOptions: NextAuthOptions = {
           email: user.email,
           name: user.name,
           role: user.role,
+          githubLogin: user.githubLogin,
+          sessionVersion: user.sessionVersion,
         };
       },
     }),
+    ...(process.env.GITHUB_ID?.trim() && process.env.GITHUB_SECRET?.trim() ? [
+      GitHubProvider({
+        clientId: process.env.GITHUB_ID.trim(),
+        clientSecret: process.env.GITHUB_SECRET.trim(),
+        authorization: { params: { scope: "read:user user:email" } },
+        checks: ["state", "pkce"],
+      }),
+    ] : []),
   ],
   callbacks: {
+    async signIn({ user, account, profile }) {
+      if (account?.provider !== "github") return true;
+      try {
+        const beaconUser = await resolveGitHubLogin(profile, account.providerAccountId, account.access_token ?? "");
+        // NextAuth's JWT callback must receive the Beacon identity and saved role.
+        user.id = beaconUser.id;
+        user.name = beaconUser.name;
+        user.email = beaconUser.email;
+        user.role = beaconUser.role;
+        user.githubLogin = beaconUser.githubLogin;
+        user.sessionVersion = beaconUser.sessionVersion;
+        return true;
+      } catch (error) {
+        const code = error instanceof GitHubLoginFailure ? error.code : "GitHubSignInFailed";
+        return `/login?error=${code}`;
+      }
+    },
     async jwt({ token, user }) {
       if (user) {
         token.id = user.id;
         token.role = user.role;
+        token.githubLogin = user.githubLogin;
+        token.sessionVersion = user.sessionVersion ?? 0;
+        token.email = user.email;
+        token.name = user.name;
+      } else if (typeof token.id === "string") {
+        const current = await prisma.user.findUnique({ where: { id: token.id }, select: { name: true, email: true, role: true, githubLogin: true, sessionVersion: true } });
+        if (!current || current.sessionVersion !== (token.sessionVersion ?? 0)) throw new Error("SessionInvalidated");
+        token.name = current.name;
+        token.email = current.email;
+        token.role = current.role;
+        token.githubLogin = current.githubLogin;
+      } else {
+        throw new Error("SessionInvalidated");
       }
       return token;
     },
@@ -92,6 +134,7 @@ export const authOptions: NextAuthOptions = {
       if (session.user && token) {
         session.user.id = token.id as string;
         session.user.role = token.role as string;
+        session.user.githubLogin = token.githubLogin;
       }
       return session;
     },

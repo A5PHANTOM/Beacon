@@ -20,6 +20,7 @@ async function main() {
   const auth = load("src/lib/auth.ts", {
     "next-auth": { getServerSession: async () => session },
     "next-auth/providers/credentials": { __esModule: true, default: (config) => config },
+    "./github-login": { resolveGitHubLogin: async () => { throw new Error("Unexpected OAuth callback"); }, GitHubLoginFailure: class extends Error {} },
     "./db": { prisma: {} },
   });
   const middleware = load("src/middleware.ts", {

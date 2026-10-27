@@ -58,7 +58,7 @@ export async function retryGitHubSyncAction(input: z.infer<typeof githubProjectS
     const connection = await prisma.gitHubConnection.findUnique({ where: { projectId } });
     if (!connection?.enabled) return { success: false, error: "Connect GitHub before syncing." };
     const issues = await prisma.issue.findMany({ where: { projectId }, select: { id: true, updatedAt: true, githubSync: true }, orderBy: { createdAt: "asc" } });
-    const pending = issues.filter(i => !i.githubSync?.syncedAt || i.githubSync.lastError || i.githubSync.syncedAt < i.updatedAt);
+    const pending = issues.filter(i => !i.githubSync?.assignmentSynced || !i.githubSync.syncedAt || i.githubSync.lastError || i.githubSync.syncedAt < i.updatedAt);
     // Small batches keep retries within a serverless request's execution budget.
     for (const issue of pending.slice(0, 3)) await syncIssueToGitHub(issue.id, session.user.id);
     revalidatePath(`/projects/${projectId}`);

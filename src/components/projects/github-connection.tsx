@@ -88,7 +88,7 @@ export function GitHubConnectionPanel({ projectId, connection, pending, errors }
           <ul>
             <li><Check size={15} aria-hidden="true" /><span>New issues appear in GitHub.</span></li>
             <li><Check size={15} aria-hidden="true" /><span>Closing and reopening sync automatically.</span></li>
-            <li><Check size={15} aria-hidden="true" /><span>Assigned people are added as comments.</span></li>
+            <li><Check size={15} aria-hidden="true" /><span>Selected developers are assigned in GitHub.</span></li>
           </ul>
           <p>Changes sync from Beacon. Edits made in GitHub stay in GitHub.</p>
           {connection?.enabled && <div className={styles.syncActions}>

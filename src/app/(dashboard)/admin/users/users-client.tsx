@@ -1,5 +1,7 @@
 "use client";
 
+import { signOut } from "next-auth/react";
+import { ResetEmailModal } from "@/components/auth/reset-email-modal";
 import { useState } from "react";
 import Link from "next/link";
 import {
@@ -17,6 +19,7 @@ import {
   BarChart3,
   Pencil,
   KeyRound,
+  Mail,
 } from "lucide-react";
 import {
   createUserAction,
@@ -30,6 +33,7 @@ type UserItem = {
   id: string;
   name: string;
   email: string;
+  githubLogin?: string | null;
   role: string;
   createdAt: string;
   memberships: {
@@ -79,6 +83,8 @@ export function UsersClient({
   const [editLoading, setEditLoading] = useState(false);
   const [editError, setEditError] = useState<string | null>(null);
   const [editSuccess, setEditSuccess] = useState<string | null>(null);
+
+  const [emailUser, setEmailUser] = useState<UserItem | null>(null);
 
   // Password reset state
   const [passwordUser, setPasswordUser] = useState<UserItem | null>(null);
@@ -240,11 +246,12 @@ export function UsersClient({
     if (!res.success || !res.data) {
       setEditError(res.error || "Failed to update user details.");
     } else {
+      if (editingUser.id === currentUserId && (editingUser.email !== res.data.email || editingUser.role !== res.data.role)) { void signOut({ callbackUrl: "/login" }); }
       setEditSuccess(`Details updated for ${res.data.name}!`);
       setUsers((prev) =>
         prev.map((u) =>
           u.id === editingUser.id
-            ? { ...u, name: res.data!.name, email: res.data!.email, role: res.data!.role }
+            ? { ...u, name: res.data!.name, email: res.data!.email, role: res.data!.role, githubLogin: res.data!.githubLogin }
             : u
         )
       );
@@ -464,6 +471,8 @@ export function UsersClient({
         </div>
       </div>
 
+      {success && !isModalOpen && <p role="status" style={{ marginBottom: 16, padding: "12px 16px", borderRadius: 8, background: "var(--ok-soft)", color: "var(--ok)", fontSize: 12 }}>{success}</p>}
+
       {/* Users Table */}
       <div
         style={{
@@ -512,6 +521,7 @@ export function UsersClient({
                             )}
                           </div>
                           <div className="mono" style={{ fontSize: 11, color: "var(--text-faint)" }}>{user.email}</div>
+                          {user.githubLogin && <div style={{ fontSize: 10, color: "var(--accent)", marginTop: 4 }}>GitHub · @{user.githubLogin}</div>}
                         </div>
                       </div>
                     </td>
@@ -572,7 +582,7 @@ export function UsersClient({
                       <div style={{ color: "var(--text-faint)" }}><b>{user._count.reported}</b> reported</div>
                     </td>
                     <td style={{ padding: "14px 20px", textAlign: "right" }}>
-                      <div style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                      <div style={{ display: "inline-flex", alignItems: "center", flexWrap: "wrap", justifyContent: "flex-end", gap: 6 }}>
                         <button
                           type="button"
                           onClick={() => handleOpenEdit(user)}
@@ -595,6 +605,7 @@ export function UsersClient({
                           <Pencil className="h-3.5 w-3.5" style={{ color: "var(--accent)" }} />
                           <span>Edit</span>
                         </button>
+                        <button type="button" onClick={() => { setSuccess(null); setEmailUser(user); }} title={`Change email for ${user.name}`} style={{ display: "inline-flex", alignItems: "center", gap: 5, background: "var(--surface-2)", border: "1px solid var(--border)", borderRadius: 7, padding: "4px 8px", fontSize: 11, fontWeight: 600, color: "var(--text)", cursor: "pointer" }}><Mail size={14} style={{ color: "var(--accent)" }} /><span>Reset Email</span></button>
 
                         <button
                           type="button"
@@ -647,6 +658,13 @@ export function UsersClient({
           </table>
         </div>
       </div>
+
+      {emailUser && <ResetEmailModal user={emailUser} onClose={() => setEmailUser(null)} onSaved={updated => {
+        setUsers(previous => previous.map(user => user.id === updated.id ? { ...user, email: updated.email, githubLogin: null } : user));
+        setSuccess(`Email updated for ${updated.name}. They must sign in again.`);
+        setEmailUser(null);
+        if (updated.id === currentUserId) void signOut({ callbackUrl: "/login" });
+      }} />}
 
       {/* Create User Modal */}
       {isModalOpen && (

@@ -123,10 +123,11 @@ export default async function ProjectIssuesPage({ params }: Props) {
     description: s.description,
   }));
 
-  const pending = rawIssues.filter(i => !i.githubSync?.syncedAt || i.githubSync.lastError || i.githubSync.syncedAt < i.updatedAt);
+  const pending = rawIssues.filter(i => !i.githubSync?.assignmentSynced || !i.githubSync.syncedAt || i.githubSync.lastError || i.githubSync.syncedAt < i.updatedAt);
 
   return (
     <IssueWorkspace
+      assignmentConnectionKey={project.github ? `${project.github.owner}/${project.github.repo}:${project.github.enabled}` : "beacon"}
       integrationPanel={can((userMembership?.roleInProject ?? "VIEWER") as ProjectRole, "project:github", session.user.role as GlobalRole) && <GitHubConnectionPanel projectId={project.id} connection={project.github} pending={pending.length} errors={pending.filter(i => i.githubSync?.lastError).map(i => ({ key: `${project.key}-${i.number}`, message: i.githubSync!.lastError! }))} />}
       project={{
         id: project.id,

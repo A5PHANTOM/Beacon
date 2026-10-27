@@ -5,12 +5,15 @@ declare module "next-auth" {
     user: {
       id: string;
       role: string;
+      githubLogin?: string | null;
     } & DefaultSession["user"];
   }
 
   interface User {
+    sessionVersion?: number;
     id: string;
     role: string;
+    githubLogin?: string | null;
   }
 }
 
@@ -18,5 +21,7 @@ declare module "next-auth/jwt" {
   interface JWT {
     id?: string;
     role?: string;
+    sessionVersion?: number;
+    githubLogin?: string | null;
   }
 }
