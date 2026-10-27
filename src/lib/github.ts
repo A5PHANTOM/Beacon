@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db";
 import { writeIssueHistory } from "@/lib/history";
 
 import { githubRequest, decryptGitHubToken } from "./github-api";
+import { drainGitHubDeliveries } from "./github-webhooks";
 import { getAssignableDevelopers } from "./project-assignees";
 export { encryptGitHubToken, githubRequest } from "./github-api";
 
@@ -72,6 +73,9 @@ export async function syncIssueToGitHub(issueId: string, userId: string) {
       title, body, state: issue.status === "CLOSED" ? "closed" : "open",
       ...(!assignmentError ? { assignees: githubAssignee?.githubLogin ? [githubAssignee.githubLogin] : [] } : {}),
     });
+    const confirmedState = z.object({ state: z.enum(["open", "closed"]) }).parse(patched).state;
+    if (confirmedState !== (issue.status === "CLOSED" ? "closed" : "open")) throw new Error("GitHub did not apply the requested status. Retry sync.");
+    await prisma.gitHubIssueSync.update({ where: { issueId }, data: { lastConfirmedStatus: issue.status } });
     if (!assignmentError) {
       // GitHub can silently ignore assignees. A 2xx response alone is not success.
       const actual = z.object({ assignees: z.array(z.object({ id: z.number().int().positive() })) }).parse(patched).assignees;
@@ -111,6 +115,8 @@ export async function syncIssueToGitHub(issueId: string, userId: string) {
     await prisma.gitHubIssueSync.update({ where: { issueId }, data: { lastError: message, assignmentSynced: false } });
   } finally {
     await prisma.gitHubIssueSync.updateMany({ where: { issueId, lockedUntil: lease }, data: { lockedUntil: null } });
+    // Signed events that arrived during the outbound write are durable, not lost.
+    try { await drainGitHubDeliveries(issueId); } catch { console.error("Pending GitHub events could not be processed", { issueId }); }
   }
 }
 

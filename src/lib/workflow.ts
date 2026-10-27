@@ -240,3 +240,12 @@ export function canTransition(from: IssueStatus | string, to: IssueStatus | stri
   // If source is a custom status, allow transition to other statuses
   return true;
 }
+
+// GitHub has only open/closed. Reopen terminal Beacon states without downgrading
+// active pipeline statuses when GitHub echoes a Beacon-originated open request.
+export const githubInboundStatusTargets = { reopened: "IN_PROGRESS", closed: "CLOSED" } as const;
+export function githubInboundStatusTarget(action: keyof typeof githubInboundStatusTargets, current: string): IssueStatus | null {
+  if (action === "reopened" && !["CLOSED", "FIXED", "VERIFIED"].includes(current)) return null;
+  const target = githubInboundStatusTargets[action];
+  return target === current ? null : target;
+}

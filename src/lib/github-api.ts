@@ -17,10 +17,10 @@ export function decryptGitHubToken(value: string) {
   cipher.setAuthTag(tag);
   return Buffer.concat([cipher.update(data), cipher.final()]).toString("utf8");
 }
-export async function githubRequest(token: string, path: string, method = "GET", body?: unknown): Promise<unknown> {
+export async function githubRequest(token: string, path: string, method = "GET", body?: unknown, timeoutMs = 15000): Promise<unknown> {
   const response = await fetch(`https://api.github.com${path}`, {
     method, headers: { Authorization: `Bearer ${token}`, Accept: "application/vnd.github+json", "X-GitHub-Api-Version": "2022-11-28", "Content-Type": "application/json" },
-    body: body === undefined ? undefined : JSON.stringify(body), cache: "no-store", signal: AbortSignal.timeout(15000), redirect: "error",
+    body: body === undefined ? undefined : JSON.stringify(body), cache: "no-store", signal: AbortSignal.timeout(timeoutMs), redirect: "error",
   });
   if (!response.ok) {
     if (response.status === 401) throw new Error("GitHub token expired or is invalid. Update the connection.");

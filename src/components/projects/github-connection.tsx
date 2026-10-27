@@ -3,13 +3,13 @@
 import { useId, useState, useTransition } from "react";
 import { ArrowUpRight, Check, ChevronDown, CircleAlert, GitBranch, LoaderCircle, LockKeyhole, Pause, RefreshCw } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { connectGitHubAction, disconnectGitHubAction, retryGitHubSyncAction } from "@/app/(dashboard)/projects/[id]/github-actions";
+import { connectGitHubAction, disconnectGitHubAction, retryGitHubSyncAction, enableGitHubUpdatesAction, retryGitHubUpdatesAction } from "@/app/(dashboard)/projects/[id]/github-actions";
 import { githubConnectionSchema } from "@/lib/github-validation";
 import styles from "./github-connection.module.css";
 
-type Props = { projectId: string; connection: { owner: string; repo: string; enabled: boolean } | null; pending: number; errors: { key: string; message: string }[] };
+type Props = { projectId: string; connection: { owner: string; repo: string; enabled: boolean; inboundEnabled: boolean; lastWebhookError: string | null } | null; incomingPending: number; pending: number; errors: { key: string; message: string }[] };
 
-export function GitHubConnectionPanel({ projectId, connection, pending, errors }: Props) {
+export function GitHubConnectionPanel({ projectId, connection, pending, incomingPending, errors }: Props) {
   const [expanded, setExpanded] = useState(false);
   const [message, setMessage] = useState("");
   const [failed, setFailed] = useState(false);
@@ -74,7 +74,7 @@ export function GitHubConnectionPanel({ projectId, connection, pending, errors }
             <label className={styles.field}>Personal access token
               <input name="githubAccessToken" type="password" required autoComplete="new-password" spellCheck={false} placeholder="github_pat_••••••••••••" aria-describedby={`${panelId}-token-help`} disabled={busy} />
             </label>
-            <p className={styles.helper} id={`${panelId}-token-help`}>Select this repository and allow <strong>Issues: Read and write</strong>. <a href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noreferrer">Create a token <ArrowUpRight size={12} aria-hidden="true" /></a></p>
+            <p className={styles.helper} id={`${panelId}-token-help`}>Select this repository and allow <strong>Issues: Read and write</strong>. For incoming updates, also allow <strong>Webhooks: Read and write</strong>. <a href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noreferrer">Create a token <ArrowUpRight size={12} aria-hidden="true" /></a></p>
             <div className={styles.formFooter}>
               <span className={styles.security}><LockKeyhole size={13} aria-hidden="true" />Token stored securely</span>
               <button className={styles.primary} disabled={busy} type="submit">{busy ? <LoaderCircle size={15} className={styles.spin} aria-hidden="true" /> : <GitBranch size={15} aria-hidden="true" />}{busy ? "Saving…" : connection ? "Save connection" : "Connect GitHub"}</button>
@@ -90,10 +90,15 @@ export function GitHubConnectionPanel({ projectId, connection, pending, errors }
             <li><Check size={15} aria-hidden="true" /><span>Closing and reopening sync automatically.</span></li>
             <li><Check size={15} aria-hidden="true" /><span>Selected developers are assigned in GitHub.</span></li>
           </ul>
-          <p>Changes sync from Beacon. Edits made in GitHub stay in GitHub.</p>
+          <p>Beacon sends issue details and assignments to GitHub. Enable GitHub updates to receive close/reopen events; other GitHub edits stay there.</p>
           {connection?.enabled && <div className={styles.syncActions}>
             <button className={styles.secondary} disabled={busy || pending === 0} type="button" onClick={() => run(() => retryGitHubSyncAction({ projectId }))}><RefreshCw size={14} aria-hidden="true" />Sync pending{pending > 0 && <span>{pending}</span>}</button>
             <span className={styles.helper}>Includes existing project issues.</span>
+            <button className={styles.secondary} disabled={busy} type="button" onClick={() => run(() => enableGitHubUpdatesAction({ projectId }))}><RefreshCw size={14} aria-hidden="true" />{connection.inboundEnabled ? "Check GitHub updates" : "Enable GitHub updates"}</button>
+            <span className={styles.helper}>{connection.inboundEnabled ? "GitHub close/reopen updates are enabled. Beacon refreshes while this project is open." : "Requires Webhooks: Read and write on the project token."}</span>
+            {incomingPending > 0 && <button className={styles.secondary} disabled={busy} type="button" onClick={() => run(() => retryGitHubUpdatesAction({ projectId }))}>Retry incoming ({incomingPending})</button>}
+            {connection.lastWebhookError && <p className={styles.failure} role="alert">{connection.lastWebhookError}</p>}
+
             <button className={styles.pause} disabled={busy} type="button" onClick={() => run(() => disconnectGitHubAction({ projectId }))}><Pause size={12} aria-hidden="true" />Pause sync</button>
           </div>}
         </aside>

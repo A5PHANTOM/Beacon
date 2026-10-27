@@ -81,6 +81,7 @@ model Issue {
   comments         Comment[]
   attachments      Attachment[]
   history          IssueHistory[]
+  githubDeliveries GitHubWebhookDelivery[]
   githubSync       GitHubIssueSync?
   outgoingLinks    IssueLink[]    @relation("SourceIssue")
   incomingLinks    IssueLink[]    @relation("LinkedIssue")
@@ -207,6 +208,13 @@ model GitHubConnection {
   owner          String
   repo           String
   encryptedToken String
+  githubRepositoryId String?
+  encryptedWebhookSecret String?
+  webhookId Int?
+  inboundEnabled Boolean @default(false)
+  lastWebhookAt DateTime?
+  lastWebhookError String?
+  deliveries GitHubWebhookDelivery[]
   enabled        Boolean @default(true)
   project        Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
 }
@@ -216,9 +224,33 @@ model GitHubIssueSync {
   number            Int?
   githubAssigneeId String?
   assignmentSynced Boolean @default(false)
+  lastConfirmedStatus String?
   assigneeSnapshot  String?
   lastError         String?
   syncedAt          DateTime?
   lockedUntil       DateTime?
   issue             Issue @relation(fields: [issueId], references: [id], onDelete: Cascade)
+}
+
+model GitHubWebhookDelivery {
+  projectId String
+  deliveryId String
+  issueId String
+  issueNumber Int
+  remoteIssueId String
+  senderGitHubId String
+  senderLogin String
+  action String
+  remoteState String
+  remoteUpdatedAt DateTime
+  payloadHash String
+  receivedAt DateTime @default(now())
+  processedAt DateTime?
+  result String?
+  lastError String?
+  connection GitHubConnection @relation(fields: [projectId], references: [projectId], onDelete: Cascade)
+  issue Issue @relation(fields: [issueId], references: [id], onDelete: Cascade)
+
+  @@id([projectId, deliveryId])
+  @@index([issueId, processedAt, receivedAt])
 }

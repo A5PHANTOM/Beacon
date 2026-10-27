@@ -155,6 +155,7 @@ export function IssueWorkspace({
   customStatuses = [],
   integrationPanel,
   assignmentConnectionKey = "",
+  githubInboundEnabled = false,
   currentUser,
 }: {
   project: {
@@ -166,6 +167,7 @@ export function IssueWorkspace({
   };
   integrationPanel?: React.ReactNode;
   assignmentConnectionKey?: string;
+  githubInboundEnabled?: boolean;
   initialIssues: WorkspaceIssue[];
   members: ProjectMemberItem[];
   customStatuses?: Array<{
@@ -185,6 +187,13 @@ export function IssueWorkspace({
   };
 }) {
   const router = useRouter();
+  useEffect(() => {
+    if (!githubInboundEnabled) return;
+    const refresh = () => { if (document.visibilityState === "visible") router.refresh(); };
+    const interval = setInterval(refresh, 15000);
+    window.addEventListener("focus", refresh);
+    return () => { clearInterval(interval); window.removeEventListener("focus", refresh); };
+  }, [githubInboundEnabled, router]);
   const [mounted, setMounted] = useState(false);
   useEffect(() => {
     setMounted(true);
@@ -317,7 +326,7 @@ export function IssueWorkspace({
         }
       });
     }
-  }, [selected?.id]);
+  }, [selected?.id, selected?.updatedAt]);
 
   // Handle Escape key to close modals
   useEffect(() => {

@@ -12,7 +12,8 @@
     "db:seed": "npx -y tsx prisma/seed.ts",
     "test:github": "node scripts/test-github-sync.cjs",
     "test:github-login": "node scripts/test-github-login.cjs",
-    "test:assignment-email": "node scripts/test-assignment-email.cjs"
+    "test:assignment-email": "node scripts/test-assignment-email.cjs",
+    "test:github-webhooks": "node scripts/test-github-webhooks.cjs"
   },
   "dependencies": {
     "@prisma/client": "^6.19.3",

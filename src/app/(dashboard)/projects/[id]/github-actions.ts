@@ -65,3 +65,61 @@ export async function retryGitHubSyncAction(input: z.infer<typeof githubProjectS
     return { success: true, data: { message: "Sync attempted for up to 3 pending issues. Check errors below; run again for remaining issues." } };
   } catch { return { success: false, error: "Could not sync. Check your connection and project permissions, then retry." }; }
 }
+
+export async function enableGitHubUpdatesAction(input: z.infer<typeof githubProjectSchema>): Promise<Result> {
+  const parsed = githubProjectSchema.safeParse(input);
+  if (!parsed.success) return { success: false, error: "Invalid project." };
+  try {
+    const { projectId } = parsed.data;
+    await authorize(projectId);
+    const connection = await prisma.gitHubConnection.findUnique({ where: { projectId } });
+    if (!connection?.enabled) return { success: false, error: "Connect and resume the GitHub repository first." };
+    const baseUrl = new URL(process.env.NEXTAUTH_URL ?? "http://localhost:3000");
+    if (baseUrl.protocol !== "https:" || ["localhost", "127.0.0.1", "::1", "[::1]"].includes(baseUrl.hostname)) return { success: false, error: "Enable GitHub updates on your deployed Beacon site. GitHub cannot deliver webhooks to localhost." };
+    const callback = `${baseUrl.origin}/api/github/webhooks/${encodeURIComponent(projectId)}`;
+    const { randomBytes } = await import("node:crypto");
+    const { decryptGitHubToken } = await import("@/lib/github-api");
+    const token = decryptGitHubToken(connection.encryptedToken);
+    const base = `/repos/${encodeURIComponent(connection.owner)}/${encodeURIComponent(connection.repo)}`;
+    const repository = z.object({ id: z.number().int().positive(), has_issues: z.boolean() }).parse(await githubRequest(token, base));
+    if (!repository.has_issues) return { success: false, error: "Enable Issues in the GitHub repository first." };
+    if (connection.githubRepositoryId && connection.githubRepositoryId !== String(repository.id)) return { success: false, error: "The repository identity changed. Existing issue links cannot be moved to another repository." };
+    // Establish a stable per-project secret. Concurrent setup attempts must use
+    // the winner's secret, and must never rotate a working webhook implicitly.
+    await prisma.gitHubConnection.updateMany({ where: { projectId, encryptedWebhookSecret: null }, data: { encryptedWebhookSecret: encryptGitHubToken(randomBytes(32).toString("hex")) } });
+    await prisma.gitHubConnection.update({ where: { projectId }, data: { githubRepositoryId: String(repository.id) } });
+    const saved = await prisma.gitHubConnection.findUniqueOrThrow({ where: { projectId } });
+    const hookSchema = z.object({ id: z.number().int().positive(), config: z.object({ url: z.string() }) });
+    let matching: z.infer<typeof hookSchema>[] = [];
+    for (let page = 1; page <= 5; page++) {
+      const hooks = z.array(hookSchema).parse(await githubRequest(token, `${base}/hooks?per_page=100&page=${page}`));
+      matching = matching.concat(hooks.filter(hook => hook.config.url === callback));
+      if (hooks.length < 100) break;
+      if (page === 5) throw new Error("Incomplete webhook list");
+    }
+    if (matching.length > 1) return { success: false, error: "Multiple Beacon webhooks match this project. Keep one matching webhook in GitHub settings, then retry." };
+    const config = { url: callback, content_type: "json", insecure_ssl: "0", secret: decryptGitHubToken(saved.encryptedWebhookSecret!) };
+    const activeHookSchema = hookSchema.extend({ active: z.literal(true), events: z.array(z.string()).refine(events => events.includes("issues")) });
+    const hook = activeHookSchema.parse(await githubRequest(token, matching.length ? `${base}/hooks/${matching[0].id}` : `${base}/hooks`, matching.length ? "PATCH" : "POST", { ...(matching.length ? {} : { name: "web" }), active: true, events: ["issues"], config }));
+    if (hook.config.url !== callback) throw new Error("Webhook callback was not applied");
+    await prisma.gitHubConnection.update({ where: { projectId }, data: { webhookId: hook.id, inboundEnabled: true, lastWebhookError: null } });
+    revalidatePath(`/projects/${projectId}`);
+    return { success: true, data: { message: "GitHub updates enabled. Linked issues can now reopen or close in Beacon when permitted by the workflow." } };
+  } catch {
+    return { success: false, error: "Could not configure GitHub updates. The project token needs Webhooks: Read and write, and its GitHub account must be allowed to manage repository webhooks. Update the token and retry." };
+  }
+}
+
+export async function retryGitHubUpdatesAction(input: z.infer<typeof githubProjectSchema>): Promise<Result> {
+  const parsed = githubProjectSchema.safeParse(input);
+  if (!parsed.success) return { success: false, error: "Invalid project." };
+  try {
+    const { projectId } = parsed.data;
+    await authorize(projectId);
+    const { processGitHubDelivery } = await import("@/lib/github-webhooks");
+    const deliveries = await prisma.gitHubWebhookDelivery.findMany({ where: { projectId, processedAt: null }, orderBy: { receivedAt: "asc" }, take: 5, select: { deliveryId: true } });
+    for (const delivery of deliveries) await processGitHubDelivery(projectId, delivery.deliveryId);
+    revalidatePath(`/projects/${projectId}`);
+    return { success: true, data: { message: "Incoming GitHub updates retried. Check the incoming status below for any remaining problems." } };
+  } catch { return { success: false, error: "Could not retry incoming updates. Check your project permissions and connection." }; }
+}
