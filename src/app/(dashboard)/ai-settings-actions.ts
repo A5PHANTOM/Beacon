@@ -4,9 +4,67 @@ import { z } from "zod";
 import { prisma } from "@/lib/db";
 import { requireAuth } from "@/lib/auth";
 import { revalidatePath } from "next/cache";
+import { cookies } from "next/headers";
+
+export const DEFAULT_GEMINI_MODELS = [
+  {
+    id: "gemini-2.5-flash",
+    name: "Gemini 2.5 Flash",
+    tag: "Recommended",
+    badgeColor: "#10b981",
+    description: "Ultra-fast multimodal reasoning, 1M context. Ideal balance of speed & quality for bug tracking and screenshot OCR.",
+  },
+  {
+    id: "gemini-2.5-pro",
+    name: "Gemini 2.5 Pro",
+    tag: "Deep Reasoning",
+    badgeColor: "#6366f1",
+    description: "Advanced cognitive reasoning for complex stack traces, deep root-cause diagnosis, and architectural bugs.",
+  },
+  {
+    id: "gemini-2.5-flash-lite",
+    name: "Gemini 2.5 Flash-Lite",
+    tag: "Fast & Light",
+    badgeColor: "#06b6d4",
+    description: "Lightweight & low-latency model for instant triage and high-volume ticket logging.",
+  },
+  {
+    id: "gemini-2.0-flash",
+    name: "Gemini 2.0 Flash",
+    tag: "Multimodal",
+    badgeColor: "#8b5cf6",
+    description: "Next-gen multimodal workhorse model with strong visual reasoning capabilities.",
+  },
+  {
+    id: "gemini-1.5-flash",
+    name: "Gemini 1.5 Flash",
+    tag: "Standard",
+    badgeColor: "#64748b",
+    description: "Fast, versatile workhorse model with 1M token context window.",
+  },
+  {
+    id: "gemini-1.5-pro",
+    name: "Gemini 1.5 Pro",
+    tag: "High Intelligence",
+    badgeColor: "#d97706",
+    description: "2M token context window for large documentation and long code reviews.",
+  },
+];
+
+export type GeminiModelItem = {
+  id: string;
+  name: string;
+  displayName?: string;
+  description?: string;
+  tag?: string;
+  badgeColor?: string;
+  inputTokenLimit?: number;
+  outputTokenLimit?: number;
+};
 
 const saveAiSettingsSchema = z.object({
-  geminiApiKey: z.string().trim().min(5, "API key must be at least 5 characters"),
+  geminiApiKey: z.string().trim().optional().or(z.literal("")),
+  geminiModel: z.string().trim().min(1, "Please select or enter a valid model").default("gemini-2.5-flash"),
   aiUsageLimit: z.number().min(1).max(10000).default(50),
 });
 
@@ -35,11 +93,17 @@ export async function getUserAISettingsAction() {
 
     let maskedKey = "";
     if (hasCustomKey && user.geminiApiKey) {
-      const len = user.geminiApiKey.length;
       maskedKey = `${user.geminiApiKey.slice(0, 6)}...${user.geminiApiKey.slice(-4)}`;
     } else if (hasServerFallback) {
       maskedKey = "Server Configured (.env)";
     }
+
+    // Read chosen model from secure long-lived cookie (keeps DB untouched)
+    const cookieStore = await cookies();
+    const geminiModel =
+      cookieStore.get("beacon_gemini_model")?.value ||
+      process.env.GEMINI_MODEL ||
+      "gemini-2.5-flash";
 
     return {
       success: true,
@@ -48,6 +112,7 @@ export async function getUserAISettingsAction() {
         hasCustomKey,
         hasServerFallback,
         maskedKey,
+        geminiModel,
         aiUsageCount: user.aiUsageCount || 0,
         aiUsageLimit: user.aiUsageLimit || 50,
       },
@@ -59,7 +124,7 @@ export async function getUserAISettingsAction() {
 }
 
 /**
- * Test a Gemini API key against Google Generative Language API
+ * Test a Gemini API key against Google Generative Language API and discover available models
  */
 export async function testGeminiApiKeyAction(apiKey: string) {
   try {
@@ -86,10 +151,31 @@ export async function testGeminiApiKeyAction(apiKey: string) {
     }
 
     const data = await res.json();
-    const availableModels = data.models ? data.models.length : 0;
+    const rawModels: any[] = Array.isArray(data.models) ? data.models : [];
+    const validModels = rawModels
+      .filter((m) => {
+        const methods = m.supportedGenerationMethods || [];
+        return methods.includes("generateContent") && m.name?.toLowerCase().includes("gemini");
+      })
+      .map((m) => {
+        const cleanId = m.name.replace(/^models\//, "");
+        const matchedDefault = DEFAULT_GEMINI_MODELS.find((d) => d.id === cleanId);
+        return {
+          id: cleanId,
+          name: cleanId,
+          displayName: m.displayName || matchedDefault?.name || cleanId,
+          description: m.description || matchedDefault?.description || "",
+          tag: matchedDefault?.tag || (cleanId.includes("pro") ? "Pro" : cleanId.includes("flash") ? "Flash" : "Model"),
+          badgeColor: matchedDefault?.badgeColor || (cleanId.includes("pro") ? "#6366f1" : "#10b981"),
+          inputTokenLimit: m.inputTokenLimit,
+          outputTokenLimit: m.outputTokenLimit,
+        };
+      });
+
     return {
       success: true,
-      message: `API Key is valid! Connected to Google Gemini (${availableModels} models available).`,
+      message: `API Key verified! Connected to Google Gemini (${validModels.length || rawModels.length} models available).`,
+      models: validModels.length > 0 ? validModels : DEFAULT_GEMINI_MODELS,
     };
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : "Failed to verify API key with Google";
@@ -98,7 +184,87 @@ export async function testGeminiApiKeyAction(apiKey: string) {
 }
 
 /**
- * Save or update user's Gemini API key & usage limit in DB
+ * Fetch available Gemini models (from Google API if key is present, otherwise defaults)
+ */
+export async function getAvailableGeminiModelsAction(apiKey?: string) {
+  try {
+    const session = await requireAuth();
+    let keyToUse = apiKey?.trim();
+
+    if (!keyToUse) {
+      const user = await prisma.user.findUnique({
+        where: { id: session.user.id },
+        select: { geminiApiKey: true },
+      });
+      keyToUse = user?.geminiApiKey || process.env.GEMINI_API_KEY || "";
+    }
+
+    if (!keyToUse) {
+      return {
+        success: true,
+        data: DEFAULT_GEMINI_MODELS,
+        source: "default" as const,
+      };
+    }
+
+    const res = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models?key=${encodeURIComponent(keyToUse)}`
+    );
+
+    if (!res.ok) {
+      return {
+        success: true,
+        data: DEFAULT_GEMINI_MODELS,
+        source: "default" as const,
+      };
+    }
+
+    const json = await res.json();
+    const rawModels: any[] = Array.isArray(json.models) ? json.models : [];
+
+    const validModels: GeminiModelItem[] = rawModels
+      .filter((m) => {
+        const methods = m.supportedGenerationMethods || [];
+        return methods.includes("generateContent") && m.name?.toLowerCase().includes("gemini");
+      })
+      .map((m) => {
+        const cleanId = m.name.replace(/^models\//, "");
+        const matchedDefault = DEFAULT_GEMINI_MODELS.find((d) => d.id === cleanId);
+        return {
+          id: cleanId,
+          name: cleanId,
+          displayName: m.displayName || matchedDefault?.name || cleanId,
+          description: m.description || matchedDefault?.description || "",
+          tag: matchedDefault?.tag || (cleanId.includes("pro") ? "Pro" : cleanId.includes("flash") ? "Flash" : "Model"),
+          badgeColor: matchedDefault?.badgeColor || (cleanId.includes("pro") ? "#6366f1" : "#10b981"),
+          inputTokenLimit: m.inputTokenLimit,
+          outputTokenLimit: m.outputTokenLimit,
+        };
+      });
+
+    const priorityIds = ["gemini-2.5-flash", "gemini-2.5-pro", "gemini-2.5-flash-lite", "gemini-2.0-flash", "gemini-1.5-flash", "gemini-1.5-pro"];
+    const sorted = [
+      ...priorityIds.map((pid) => validModels.find((m) => m.id === pid)).filter(Boolean) as GeminiModelItem[],
+      ...validModels.filter((m) => !priorityIds.includes(m.id)),
+    ];
+
+    return {
+      success: true,
+      data: sorted.length > 0 ? sorted : DEFAULT_GEMINI_MODELS,
+      source: "live" as const,
+    };
+  } catch {
+    return {
+      success: true,
+      data: DEFAULT_GEMINI_MODELS,
+      source: "default" as const,
+    };
+  }
+}
+
+/**
+ * Save or update user's Gemini API key, model selection, & usage limit
+ * Model is stored in a 1-year cookie so the production database schema remains untouched.
  */
 export async function updateUserAISettingsAction(data: z.infer<typeof saveAiSettingsSchema>) {
   try {
@@ -107,34 +273,66 @@ export async function updateUserAISettingsAction(data: z.infer<typeof saveAiSett
     if (!parsed.success) {
       return {
         success: false,
-        error: parsed.error.issues[0]?.message || "Invalid API key data",
+        error: parsed.error.issues[0]?.message || "Invalid AI settings",
       };
     }
 
-    const { geminiApiKey, aiUsageLimit } = parsed.data;
+    const { geminiApiKey, geminiModel, aiUsageLimit } = parsed.data;
 
-    // Verify key with Google before persisting
-    const testResult = await testGeminiApiKeyAction(geminiApiKey);
-    if (!testResult.success) {
+    // Persist model in secure long-lived cookie (1 year)
+    if (geminiModel) {
+      const cookieStore = await cookies();
+      cookieStore.set("beacon_gemini_model", geminiModel, {
+        path: "/",
+        maxAge: 31536000,
+        sameSite: "lax",
+      });
+    }
+
+    const existingUser = await prisma.user.findUnique({
+      where: { id: session.user.id },
+      select: { geminiApiKey: true },
+    });
+
+    const updateData: {
+      geminiApiKey?: string;
+      aiUsageLimit: number;
+    } = {
+      aiUsageLimit,
+    };
+
+    if (geminiApiKey && geminiApiKey.trim().length > 0) {
+      const trimmedKey = geminiApiKey.trim();
+      if (trimmedKey.length < 5) {
+        return { success: false, error: "API key must be at least 5 characters" };
+      }
+
+      // Verify key with Google before persisting
+      const testResult = await testGeminiApiKeyAction(trimmedKey);
+      if (!testResult.success) {
+        return {
+          success: false,
+          error: testResult.error || "The provided Gemini API key could not be verified by Google.",
+        };
+      }
+      updateData.geminiApiKey = trimmedKey;
+    } else if (!existingUser?.geminiApiKey && !process.env.GEMINI_API_KEY) {
       return {
         success: false,
-        error: testResult.error || "The provided Gemini API key could not be verified by Google.",
+        error: "Please enter your Gemini API key to activate AI features.",
       };
     }
 
-    // Persist to user record in DB
+    // Persist API key and usage limit to user record (existing DB columns only)
     await prisma.user.update({
       where: { id: session.user.id },
-      data: {
-        geminiApiKey,
-        aiUsageLimit,
-      },
+      data: updateData,
     });
 
     revalidatePath("/projects");
     return {
       success: true,
-      message: "Gemini API key and limit saved successfully to your Beacon account.",
+      message: `Gemini settings updated! Model set to ${geminiModel}.`,
     };
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : "Failed to save AI settings";

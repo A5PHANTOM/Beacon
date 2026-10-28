@@ -112,12 +112,16 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // Read chosen model from cookie or env (keeps DB schema untouched)
+    const cookieModel = req.cookies.get("beacon_gemini_model")?.value;
+    const activeModel = modelOverride || cookieModel || process.env.GEMINI_MODEL || "gemini-2.5-flash";
+
     let customConfig: AIProviderConfig | null = null;
     if (userKey) {
       customConfig = {
         provider: providerOverride || "gemini",
         apiKey: userKey,
-        model: modelOverride || "gemini-2.5-flash",
+        model: activeModel,
       };
     }
 

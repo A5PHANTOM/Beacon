@@ -6,6 +6,7 @@ import { requireAuth } from "@/lib/auth";
 import { writeIssueHistory } from "@/lib/history";
 import { canTransition, issueStatuses, type IssueStatus } from "@/lib/workflow";
 import { revalidatePath } from "next/cache";
+import { cookies } from "next/headers";
 import { analyzeIssueWithAI, type AIProviderConfig } from "@/lib/ai";
 
 import { validateProjectAssignee } from "@/lib/project-assignees";
@@ -789,12 +790,17 @@ export async function analyzeIssueWithAIAction(data: z.infer<typeof analyzeIssue
       };
     }
 
+    // Read chosen model from cookie or env (keeps DB schema untouched)
+    const cookieStore = await cookies();
+    const cookieModel = cookieStore.get("beacon_gemini_model")?.value;
+    const activeModel = modelOverride || cookieModel || process.env.GEMINI_MODEL || "gemini-2.5-flash";
+
     let customConfig: AIProviderConfig | null = null;
     if (userKey) {
       customConfig = {
         provider: providerOverride || "gemini",
         apiKey: userKey,
-        model: modelOverride || "gemini-2.5-flash",
+        model: activeModel,
       };
     }
 
