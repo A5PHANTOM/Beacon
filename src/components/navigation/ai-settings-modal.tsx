@@ -9,9 +9,12 @@ import {
   testGeminiApiKeyAction,
   resetUserAIUsageCountAction,
   getAvailableGeminiModelsAction,
-  DEFAULT_GEMINI_MODELS,
-  type GeminiModelItem,
 } from "@/app/(dashboard)/ai-settings-actions";
+import {
+  DEFAULT_GEMINI_MODELS,
+  formatModelDisplayName,
+  type GeminiModelItem,
+} from "@/lib/gemini-models";
 
 export type AISettingsData = {
   hasKey: boolean;
@@ -22,15 +25,6 @@ export type AISettingsData = {
   aiUsageCount: number;
   aiUsageLimit: number;
 };
-
-function formatModelDisplayName(modelId: string) {
-  const match = DEFAULT_GEMINI_MODELS.find((m) => m.id === modelId);
-  if (match) return match.name;
-  return modelId
-    .replace(/^models\//, "")
-    .replace(/-/g, " ")
-    .replace(/\b\w/g, (c) => c.toUpperCase());
-}
 
 /**
  * Sidebar widget shown directly above the user profile in the navigation sidebar
@@ -453,8 +447,9 @@ export function AISettingsModal({
   }
 
   const activeModelId = isCustomModel ? customModelInput.trim() : selectedModel;
+  const modelsList = Array.isArray(availableModels) && availableModels.length > 0 ? availableModels : DEFAULT_GEMINI_MODELS;
   const currentModelMeta =
-    availableModels.find((m) => m.id === activeModelId) ||
+    modelsList.find((m) => m.id === activeModelId) ||
     DEFAULT_GEMINI_MODELS.find((m) => m.id === activeModelId);
 
   // Check if anything has changed
@@ -958,9 +953,9 @@ export function AISettingsModal({
                       ))}
                     </optgroup>
 
-                    {availableModels.filter((m) => !DEFAULT_GEMINI_MODELS.some((d) => d.id === m.id)).length > 0 && (
+                    {modelsList.filter((m) => !DEFAULT_GEMINI_MODELS.some((d) => d.id === m.id)).length > 0 && (
                       <optgroup label="Discovered Google API Models">
-                        {availableModels
+                        {modelsList
                           .filter((m) => !DEFAULT_GEMINI_MODELS.some((d) => d.id === m.id))
                           .map((m) => (
                             <option key={m.id} value={m.id}>

@@ -5,62 +5,7 @@ import { prisma } from "@/lib/db";
 import { requireAuth } from "@/lib/auth";
 import { revalidatePath } from "next/cache";
 import { cookies } from "next/headers";
-
-export const DEFAULT_GEMINI_MODELS = [
-  {
-    id: "gemini-2.5-flash",
-    name: "Gemini 2.5 Flash",
-    tag: "Recommended",
-    badgeColor: "#10b981",
-    description: "Ultra-fast multimodal reasoning, 1M context. Ideal balance of speed & quality for bug tracking and screenshot OCR.",
-  },
-  {
-    id: "gemini-2.5-pro",
-    name: "Gemini 2.5 Pro",
-    tag: "Deep Reasoning",
-    badgeColor: "#6366f1",
-    description: "Advanced cognitive reasoning for complex stack traces, deep root-cause diagnosis, and architectural bugs.",
-  },
-  {
-    id: "gemini-2.5-flash-lite",
-    name: "Gemini 2.5 Flash-Lite",
-    tag: "Fast & Light",
-    badgeColor: "#06b6d4",
-    description: "Lightweight & low-latency model for instant triage and high-volume ticket logging.",
-  },
-  {
-    id: "gemini-2.0-flash",
-    name: "Gemini 2.0 Flash",
-    tag: "Multimodal",
-    badgeColor: "#8b5cf6",
-    description: "Next-gen multimodal workhorse model with strong visual reasoning capabilities.",
-  },
-  {
-    id: "gemini-1.5-flash",
-    name: "Gemini 1.5 Flash",
-    tag: "Standard",
-    badgeColor: "#64748b",
-    description: "Fast, versatile workhorse model with 1M token context window.",
-  },
-  {
-    id: "gemini-1.5-pro",
-    name: "Gemini 1.5 Pro",
-    tag: "High Intelligence",
-    badgeColor: "#d97706",
-    description: "2M token context window for large documentation and long code reviews.",
-  },
-];
-
-export type GeminiModelItem = {
-  id: string;
-  name: string;
-  displayName?: string;
-  description?: string;
-  tag?: string;
-  badgeColor?: string;
-  inputTokenLimit?: number;
-  outputTokenLimit?: number;
-};
+import { DEFAULT_GEMINI_MODELS, type GeminiModelItem } from "@/lib/gemini-models";
 
 const saveAiSettingsSchema = z.object({
   geminiApiKey: z.string().trim().optional().or(z.literal("")),

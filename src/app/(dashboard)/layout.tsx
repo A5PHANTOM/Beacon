@@ -15,22 +15,27 @@ export default async function DashboardLayout({
   }
 
   // Fetch accessible projects for the project switcher & cmdk
-  let projects;
-  if (session.user.role === "ADMIN") {
-    projects = await prisma.project.findMany({
-      select: { id: true, name: true, key: true },
-      orderBy: { name: "asc" },
-    });
-  } else {
-    projects = await prisma.project.findMany({
-      where: {
-        members: {
-          some: { userId: session.user.id },
+  let projects: { id: string; name: string; key: string }[] = [];
+  try {
+    if (session.user.role === "ADMIN") {
+      projects = await prisma.project.findMany({
+        select: { id: true, name: true, key: true },
+        orderBy: { name: "asc" },
+      });
+    } else {
+      projects = await prisma.project.findMany({
+        where: {
+          members: {
+            some: { userId: session.user.id },
+          },
         },
-      },
-      select: { id: true, name: true, key: true },
-      orderBy: { name: "asc" },
-    });
+        select: { id: true, name: true, key: true },
+        orderBy: { name: "asc" },
+      });
+    }
+  } catch (err) {
+    console.error("Failed to load layout projects:", err);
+    projects = [];
   }
 
   return (

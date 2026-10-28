@@ -22,18 +22,20 @@ type ShellUser = {
 };
 
 export function AppShell({
-  projects,
+  projects = [],
   currentProjectId,
   currentUser,
   children,
 }: {
-  projects: SimpleProject[];
+  projects?: SimpleProject[];
   currentProjectId?: string;
   currentUser: ShellUser;
   children: React.ReactNode;
 }) {
   const router = useRouter();
   const pathname = usePathname();
+
+  const safeProjects = Array.isArray(projects) ? projects : [];
 
   const [collapsed, setCollapsed] = useState(false);
   const [theme, setTheme] = useState<"light" | "dark">("light");
@@ -78,13 +80,13 @@ export function AppShell({
   // Derive current project dynamically from route or props
   const currentProject =
     (activeTarget
-      ? projects.find(
+      ? safeProjects.find(
           (p) =>
             p.id.toLowerCase() === activeTarget.toLowerCase() ||
             p.key.toLowerCase() === activeTarget.toLowerCase()
         )
       : undefined) ||
-    projects[0] || { id: "", name: "Beacon", key: "BCN" };
+    safeProjects[0] || { id: "", name: "Beacon", key: "BCN" };
 
   // Dismiss dropdowns on outside click
   useEffect(() => {
