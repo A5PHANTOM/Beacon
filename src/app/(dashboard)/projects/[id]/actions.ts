@@ -773,10 +773,10 @@ export async function analyzeIssueWithAIAction(data: z.infer<typeof analyzeIssue
       return { success: false, error: "Project not found" };
     }
 
-    // Fetch user record for stored Gemini API key, model, and usage limits
+    // Fetch user record for stored Gemini API key and usage limits
     const userRecord = await prisma.user.findUnique({
       where: { id: session.user.id },
-      select: { geminiApiKey: true, geminiModel: true, aiUsageCount: true, aiUsageLimit: true },
+      select: { geminiApiKey: true, aiUsageCount: true, aiUsageLimit: true },
     });
 
     const userKey = apiKeyOverride || userRecord?.geminiApiKey;
@@ -794,7 +794,7 @@ export async function analyzeIssueWithAIAction(data: z.infer<typeof analyzeIssue
       customConfig = {
         provider: providerOverride || "gemini",
         apiKey: userKey,
-        model: modelOverride || userRecord?.geminiModel || process.env.GEMINI_MODEL || "gemini-2.5-flash",
+        model: modelOverride || "gemini-2.5-flash",
       };
     }
 

@@ -17,7 +17,6 @@ model User {
   passwordHash String
   role         String          @default("MEMBER") // ADMIN | MEMBER
   geminiApiKey String?
-  geminiModel  String?         @default("gemini-2.5-flash")
   aiUsageCount Int             @default(0)
   aiUsageLimit Int             @default(50)
   createdAt    DateTime        @default(now())

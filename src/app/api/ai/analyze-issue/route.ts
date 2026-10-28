@@ -93,10 +93,10 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: false, error: "Project not found" }, { status: 404 });
     }
 
-    // Fetch user record for stored Gemini API key, model, and usage limits
+    // Fetch user record for stored Gemini API key and usage limits
     const userRecord = await prisma.user.findUnique({
       where: { id: userId },
-      select: { geminiApiKey: true, geminiModel: true, aiUsageCount: true, aiUsageLimit: true },
+      select: { geminiApiKey: true, aiUsageCount: true, aiUsageLimit: true },
     });
 
     const userKey = apiKeyOverride || userRecord?.geminiApiKey;
@@ -117,7 +117,7 @@ export async function POST(req: NextRequest) {
       customConfig = {
         provider: providerOverride || "gemini",
         apiKey: userKey,
-        model: modelOverride || userRecord?.geminiModel || process.env.GEMINI_MODEL || "gemini-2.5-flash",
+        model: modelOverride || "gemini-2.5-flash",
       };
     }
 
