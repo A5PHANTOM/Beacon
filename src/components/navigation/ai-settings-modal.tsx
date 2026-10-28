@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useTransition } from "react";
 import { createPortal } from "react-dom";
 import {
   getUserAISettingsAction,
@@ -8,6 +8,9 @@ import {
   removeUserAISettingsAction,
   testGeminiApiKeyAction,
   resetUserAIUsageCountAction,
+  getAvailableGeminiModelsAction,
+  DEFAULT_GEMINI_MODELS,
+  type GeminiModelItem,
 } from "@/app/(dashboard)/ai-settings-actions";
 
 export type AISettingsData = {
@@ -15,9 +18,19 @@ export type AISettingsData = {
   hasCustomKey: boolean;
   hasServerFallback: boolean;
   maskedKey: string;
+  geminiModel: string;
   aiUsageCount: number;
   aiUsageLimit: number;
 };
+
+function formatModelDisplayName(modelId: string) {
+  const match = DEFAULT_GEMINI_MODELS.find((m) => m.id === modelId);
+  if (match) return match.name;
+  return modelId
+    .replace(/^models\//, "")
+    .replace(/-/g, " ")
+    .replace(/\b\w/g, (c) => c.toUpperCase());
+}
 
 /**
  * Sidebar widget shown directly above the user profile in the navigation sidebar
@@ -53,13 +66,18 @@ export function AISidebarWidget({
   const hasKey = settings?.hasKey;
   const count = settings?.aiUsageCount || 0;
   const limit = settings?.aiUsageLimit || 50;
+  const activeModel = settings?.geminiModel || "gemini-2.5-flash";
+  const shortModelName = activeModel
+    .replace(/^gemini-/, "")
+    .replace(/-/g, " ")
+    .replace(/\b\w/g, (c) => c.toUpperCase());
   const pct = Math.min(100, Math.round((count / (limit || 1)) * 100));
 
   if (collapsed) {
     return (
       <div
         onClick={onOpenModal}
-        title={`Gemini AI: ${hasKey ? "Active" : "Configure Key"} (${count}/${limit} calls)`}
+        title={`Gemini AI (${shortModelName}): ${hasKey ? "Active" : "Configure Key"} (${count}/${limit} calls)`}
         style={{
           margin: "0 8px 8px",
           padding: "8px",
@@ -117,7 +135,7 @@ export function AISidebarWidget({
         e.currentTarget.style.borderColor = hasKey ? "rgba(99, 102, 241, 0.25)" : "var(--border)";
         e.currentTarget.style.boxShadow = "none";
       }}
-      title="Click to configure Gemini API Key and usage limits"
+      title="Click to configure Gemini API Key, Model and usage limits"
     >
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
@@ -139,6 +157,18 @@ export function AISidebarWidget({
           </div>
           <span style={{ fontSize: 11.5, fontWeight: 700, color: "var(--text)", letterSpacing: "0.01em" }}>
             Gemini AI
+          </span>
+          <span
+            style={{
+              fontSize: 9.5,
+              fontWeight: 600,
+              padding: "1px 5px",
+              borderRadius: 4,
+              background: "rgba(99, 102, 241, 0.12)",
+              color: "var(--accent, #6366f1)",
+            }}
+          >
+            {shortModelName}
           </span>
         </div>
 
@@ -200,7 +230,7 @@ export function AISidebarWidget({
 }
 
 /**
- * Modal to view, test, save, and update the user's Gemini API key & usage limits
+ * Modal to view, test, save, and update the user's Gemini API key, model & usage limits
  */
 export function AISettingsModal({
   isOpen,
@@ -211,9 +241,17 @@ export function AISettingsModal({
 }) {
   const [mounted, setMounted] = useState(false);
   const [apiKey, setApiKey] = useState("");
+  const [selectedModel, setSelectedModel] = useState("gemini-2.5-flash");
+  const [customModelInput, setCustomModelInput] = useState("");
+  const [isCustomModel, setIsCustomModel] = useState(false);
   const [usageLimit, setUsageLimit] = useState(50);
   const [showPassword, setShowPassword] = useState(false);
   const [currentSettings, setCurrentSettings] = useState<AISettingsData | null>(null);
+
+  // Models list state
+  const [availableModels, setAvailableModels] = useState<GeminiModelItem[]>(DEFAULT_GEMINI_MODELS);
+  const [isFetchingModels, setIsFetchingModels] = useState(false);
+  const [modelsSource, setModelsSource] = useState<"default" | "live">("default");
 
   const [isLoading, setIsLoading] = useState(false);
   const [isTesting, setIsTesting] = useState(false);
@@ -223,15 +261,37 @@ export function AISettingsModal({
     setMounted(true);
   }, []);
 
+  // Fetch initial settings & models when modal opens
   useEffect(() => {
     if (isOpen) {
       setStatusMessage(null);
       setIsLoading(true);
+
       getUserAISettingsAction().then((res) => {
         setIsLoading(false);
         if (res.success && res.data) {
           setCurrentSettings(res.data);
           setUsageLimit(res.data.aiUsageLimit || 50);
+
+          const modelFromDB = res.data.geminiModel || "gemini-2.5-flash";
+          setSelectedModel(modelFromDB);
+
+          // Check if it's one of the standard models
+          const isStandard = DEFAULT_GEMINI_MODELS.some((m) => m.id === modelFromDB);
+          if (!isStandard) {
+            setIsCustomModel(true);
+            setCustomModelInput(modelFromDB);
+          } else {
+            setIsCustomModel(false);
+          }
+        }
+      });
+
+      // Load available models for current user
+      getAvailableGeminiModelsAction().then((res) => {
+        if (res.success && res.data) {
+          setAvailableModels(res.data);
+          if (res.source === "live") setModelsSource("live");
         }
       });
     }
@@ -248,6 +308,27 @@ export function AISettingsModal({
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [isOpen, isLoading, isTesting, onClose]);
 
+  // Live browse models when user enters/pastes a key
+  async function handleBrowseModels(keyToUse?: string) {
+    const key = (keyToUse !== undefined ? keyToUse : apiKey).trim();
+    setIsFetchingModels(true);
+    try {
+      const res = await getAvailableGeminiModelsAction(key);
+      if (res.success && res.data && res.data.length > 0) {
+        setAvailableModels(res.data);
+        setModelsSource(res.source);
+        if (res.source === "live") {
+          setStatusMessage({
+            type: "ok",
+            text: `Discovered ${res.data.length} live Gemini models from your Google account.`,
+          });
+        }
+      }
+    } finally {
+      setIsFetchingModels(false);
+    }
+  }
+
   // Test API key with Google
   async function handleTestKey() {
     const keyToTest = apiKey.trim();
@@ -261,6 +342,10 @@ export function AISettingsModal({
       const res = await testGeminiApiKeyAction(keyToTest);
       if (res.success) {
         setStatusMessage({ type: "ok", text: res.message || "Key verified successfully with Google Gemini!" });
+        if (res.models && res.models.length > 0) {
+          setAvailableModels(res.models);
+          setModelsSource("live");
+        }
       } else {
         setStatusMessage({ type: "err", text: res.error || "Failed to verify key with Google." });
       }
@@ -271,11 +356,20 @@ export function AISettingsModal({
     }
   }
 
-  // Save or update key & limit
-  async function handleSaveKey(e?: React.FormEvent) {
+  // Save or update key, model, & limit
+  async function handleSaveSettings(e?: React.FormEvent) {
     if (e) e.preventDefault();
+
+    const activeModelId = isCustomModel ? customModelInput.trim() : selectedModel;
+    if (!activeModelId) {
+      setStatusMessage({ type: "err", text: "Please select or enter a valid Gemini model ID." });
+      return;
+    }
+
     const keyToSave = apiKey.trim();
-    if (!keyToSave) {
+
+    // Check if key is needed
+    if (!keyToSave && !currentSettings?.hasKey) {
       setStatusMessage({ type: "err", text: "Please enter your Gemini API key." });
       return;
     }
@@ -285,23 +379,25 @@ export function AISettingsModal({
     try {
       const res = await updateUserAISettingsAction({
         geminiApiKey: keyToSave,
+        geminiModel: activeModelId,
         aiUsageLimit: Number(usageLimit) || 50,
       });
 
       if (res.success) {
-        setStatusMessage({ type: "ok", text: res.message || "Settings saved successfully!" });
+        setStatusMessage({ type: "ok", text: res.message || "AI Settings saved successfully!" });
         setApiKey("");
         // Reload current settings
         const fresh = await getUserAISettingsAction();
         if (fresh.success && fresh.data) {
           setCurrentSettings(fresh.data);
+          setSelectedModel(fresh.data.geminiModel);
         }
         window.dispatchEvent(new CustomEvent("beacon-ai-settings-updated"));
       } else {
-        setStatusMessage({ type: "err", text: res.error || "Failed to save API key" });
+        setStatusMessage({ type: "err", text: res.error || "Failed to save AI settings" });
       }
     } catch (err: unknown) {
-      setStatusMessage({ type: "err", text: err instanceof Error ? err.message : "Error saving key" });
+      setStatusMessage({ type: "err", text: err instanceof Error ? err.message : "Error saving settings" });
     } finally {
       setIsLoading(false);
     }
@@ -309,7 +405,7 @@ export function AISettingsModal({
 
   // Remove key
   async function handleRemoveKey() {
-    if (!confirm("Are you sure you want to remove your saved Gemini API key from this account?")) return;
+    if (!confirm("Are you sure you want to disconnect your Gemini API key from this account?")) return;
     setIsLoading(true);
     setStatusMessage(null);
     try {
@@ -348,6 +444,17 @@ export function AISettingsModal({
     }
   }
 
+  const activeModelId = isCustomModel ? customModelInput.trim() : selectedModel;
+  const currentModelMeta =
+    availableModels.find((m) => m.id === activeModelId) ||
+    DEFAULT_GEMINI_MODELS.find((m) => m.id === activeModelId);
+
+  // Check if anything has changed
+  const hasKeyChanged = apiKey.trim().length > 0;
+  const hasModelChanged = activeModelId !== currentSettings?.geminiModel;
+  const hasLimitChanged = usageLimit !== currentSettings?.aiUsageLimit;
+  const canSave = (hasKeyChanged || hasModelChanged || hasLimitChanged) && (currentSettings?.hasKey || hasKeyChanged);
+
   if (!mounted || !isOpen) return null;
 
   return createPortal(
@@ -374,7 +481,7 @@ export function AISettingsModal({
       <div
         style={{
           width: "100%",
-          maxWidth: 520,
+          maxWidth: 540,
           background: "var(--surface)",
           border: "1px solid var(--border)",
           borderRadius: 14,
@@ -415,9 +522,9 @@ export function AISettingsModal({
               </svg>
             </div>
             <div>
-              <h3 style={{ margin: 0, fontSize: 15, fontWeight: 800 }}>Configure Gemini API Key</h3>
+              <h3 style={{ margin: 0, fontSize: 15, fontWeight: 800 }}>Configure Gemini API & Model</h3>
               <p style={{ margin: "2px 0 0", fontSize: 11.5, color: "var(--text-faint)" }}>
-                Personal API key & usage limits stored with your Beacon account
+                Personal API key, model selection & usage limits for Beacon AI
               </p>
             </div>
           </div>
@@ -467,7 +574,7 @@ export function AISettingsModal({
             </div>
           )}
 
-          {/* Current Key Status Card */}
+          {/* Current Key & Model Status Card */}
           <div
             style={{
               padding: "12px 14px",
@@ -481,10 +588,25 @@ export function AISettingsModal({
           >
             <div>
               <div style={{ fontSize: 11, fontWeight: 700, color: "var(--text-dim)", textTransform: "uppercase" }}>
-                Current Active Key
+                Current Active Key & Model
               </div>
-              <div style={{ fontSize: 13, fontWeight: 600, color: "var(--text)", marginTop: 2, fontFamily: "monospace" }}>
-                {currentSettings?.maskedKey || (currentSettings?.hasServerFallback ? "Server Environment (.env)" : "None configured")}
+              <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 3 }}>
+                <span style={{ fontSize: 13, fontWeight: 600, color: "var(--text)", fontFamily: "monospace" }}>
+                  {currentSettings?.maskedKey || (currentSettings?.hasServerFallback ? "Server Environment (.env)" : "None configured")}
+                </span>
+                <span
+                  style={{
+                    fontSize: 11,
+                    fontWeight: 700,
+                    padding: "1px 7px",
+                    borderRadius: 5,
+                    background: "rgba(99, 102, 241, 0.14)",
+                    color: "var(--accent, #6366f1)",
+                    border: "1px solid rgba(99, 102, 241, 0.25)",
+                  }}
+                >
+                  {formatModelDisplayName(currentSettings?.geminiModel || "gemini-2.5-flash")}
+                </span>
               </div>
             </div>
 
@@ -566,22 +688,55 @@ export function AISettingsModal({
               />
             </div>
             <div style={{ fontSize: 10.5, color: "var(--text-faint)" }}>
-              Google Gemini 2.5 Flash Free Tier includes 15 Requests/Min and 1,500 Requests/Day.
+              {activeModelId.includes("pro")
+                ? "Google Gemini 2.5 Pro Free Tier includes 2 Requests/Min and 50 Requests/Day."
+                : "Google Gemini 2.5 Flash Free Tier includes 15 Requests/Min and 1,500 Requests/Day."}
             </div>
           </div>
 
-          {/* Enter / Update API Key Form */}
-          <form onSubmit={handleSaveKey} style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+          {/* Form */}
+          <form onSubmit={handleSaveSettings} style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+            {/* Enter / Update API Key */}
             <div>
-              <label style={{ display: "block", fontSize: 11, fontWeight: 700, color: "var(--text-dim)", textTransform: "uppercase", marginBottom: 4 }}>
-                {currentSettings?.hasCustomKey ? "Update Gemini API Key" : "Enter Gemini API Key"}
-              </label>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 4 }}>
+                <label style={{ fontSize: 11, fontWeight: 700, color: "var(--text-dim)", textTransform: "uppercase" }}>
+                  {currentSettings?.hasCustomKey ? "Update Gemini API Key" : "Enter Gemini API Key"}
+                </label>
+                {(apiKey.trim() || currentSettings?.hasKey) && (
+                  <button
+                    type="button"
+                    onClick={() => handleBrowseModels()}
+                    disabled={isFetchingModels}
+                    style={{
+                      background: "none",
+                      border: "none",
+                      color: "var(--accent, #6366f1)",
+                      fontSize: 11,
+                      cursor: "pointer",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 4,
+                      fontWeight: 600,
+                    }}
+                  >
+                    <span>{isFetchingModels ? "Browsing models…" : "Browse models 🔍"}</span>
+                  </button>
+                )}
+              </div>
+
               <div style={{ position: "relative" }}>
                 <input
                   type={showPassword ? "text" : "password"}
-                  placeholder={currentSettings?.hasCustomKey ? "Enter new key to replace existing..." : "Paste your Gemini API key (AQ.Ab8...)"}
+                  placeholder={currentSettings?.hasCustomKey ? "Enter new key to replace existing (or leave blank to keep)..." : "Paste your Gemini API key (AQ.Ab8...)"}
                   value={apiKey}
-                  onChange={(e) => setApiKey(e.target.value)}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setApiKey(val);
+                    // If user pasted a full key, auto browse models
+                    if (val.trim().length >= 25 && !isFetchingModels) {
+                      handleBrowseModels(val.trim());
+                    }
+                  }}
                   style={{
                     width: "100%",
                     background: "var(--surface-2)",
@@ -625,6 +780,214 @@ export function AISettingsModal({
                   )}
                 </button>
               </div>
+            </div>
+
+            {/* MODEL SUGGESTION & DROPDOWN SELECTION */}
+            <div
+              style={{
+                padding: "12px 14px",
+                borderRadius: 10,
+                background: "var(--surface-2)",
+                border: "1px solid var(--border)",
+                display: "flex",
+                flexDirection: "column",
+                gap: 10,
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                <div>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: "var(--text-dim)", textTransform: "uppercase" }}>
+                    Select Gemini Model
+                  </div>
+                  <div style={{ fontSize: 11, color: "var(--text-faint)", marginTop: 1 }}>
+                    Switch models anytime — your choice is saved for all bug analyses
+                  </div>
+                </div>
+
+                {modelsSource === "live" && (
+                  <span
+                    style={{
+                      fontSize: 10,
+                      fontWeight: 700,
+                      padding: "2px 6px",
+                      borderRadius: 4,
+                      background: "rgba(16, 185, 129, 0.15)",
+                      color: "#059669",
+                    }}
+                    title="Models queried live from Google API"
+                  >
+                    ● Live Models ({availableModels.length})
+                  </span>
+                )}
+              </div>
+
+              {/* Quick Model Suggestion Chips */}
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                {DEFAULT_GEMINI_MODELS.map((m) => {
+                  const isSelected = !isCustomModel && selectedModel === m.id;
+                  return (
+                    <button
+                      key={m.id}
+                      type="button"
+                      onClick={() => {
+                        setSelectedModel(m.id);
+                        setIsCustomModel(false);
+                      }}
+                      style={{
+                        padding: "5px 10px",
+                        borderRadius: 6,
+                        border: isSelected ? "1.5px solid var(--accent, #6366f1)" : "1px solid var(--border)",
+                        background: isSelected ? "rgba(99, 102, 241, 0.14)" : "var(--surface)",
+                        color: isSelected ? "var(--accent, #6366f1)" : "var(--text)",
+                        fontSize: 11.5,
+                        fontWeight: isSelected ? 700 : 500,
+                        cursor: "pointer",
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 6,
+                        transition: "all 0.15s ease",
+                      }}
+                    >
+                      <span>{m.name}</span>
+                      {m.tag && (
+                        <span
+                          style={{
+                            fontSize: 9,
+                            fontWeight: 700,
+                            padding: "1px 5px",
+                            borderRadius: 4,
+                            background: isSelected ? "var(--accent, #6366f1)" : "var(--border)",
+                            color: isSelected ? "#fff" : "var(--text-dim)",
+                          }}
+                        >
+                          {m.tag}
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
+
+                <button
+                  type="button"
+                  onClick={() => setIsCustomModel(true)}
+                  style={{
+                    padding: "5px 10px",
+                    borderRadius: 6,
+                    border: isCustomModel ? "1.5px solid var(--accent, #6366f1)" : "1px dashed var(--border)",
+                    background: isCustomModel ? "rgba(99, 102, 241, 0.14)" : "transparent",
+                    color: isCustomModel ? "var(--accent, #6366f1)" : "var(--text-dim)",
+                    fontSize: 11.5,
+                    fontWeight: isCustomModel ? 700 : 500,
+                    cursor: "pointer",
+                  }}
+                >
+                  Custom Model ID…
+                </button>
+              </div>
+
+              {/* Dropdown or Custom Input */}
+              {isCustomModel ? (
+                <div>
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 3 }}>
+                    <span style={{ fontSize: 10.5, color: "var(--text-dim)", fontWeight: 600 }}>Custom Model Identifier</span>
+                    <button
+                      type="button"
+                      onClick={() => setIsCustomModel(false)}
+                      style={{ background: "none", border: "none", color: "var(--accent, #6366f1)", fontSize: 10.5, cursor: "pointer", textDecoration: "underline" }}
+                    >
+                      Pick from presets
+                    </button>
+                  </div>
+                  <input
+                    type="text"
+                    placeholder="e.g. gemini-2.5-flash-latest or gemini-2.5-pro"
+                    value={customModelInput}
+                    onChange={(e) => setCustomModelInput(e.target.value)}
+                    style={{
+                      width: "100%",
+                      background: "var(--surface)",
+                      border: "1px solid var(--border)",
+                      borderRadius: 6,
+                      padding: "7px 10px",
+                      fontSize: 12,
+                      color: "var(--text)",
+                      fontFamily: "monospace",
+                      outline: "none",
+                    }}
+                  />
+                </div>
+              ) : (
+                <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                  <label style={{ fontSize: 10.5, color: "var(--text-dim)", fontWeight: 600 }}>
+                    All Available Models (Dropdown)
+                  </label>
+                  <select
+                    value={selectedModel}
+                    onChange={(e) => {
+                      if (e.target.value === "__custom__") {
+                        setIsCustomModel(true);
+                      } else {
+                        setSelectedModel(e.target.value);
+                        setIsCustomModel(false);
+                      }
+                    }}
+                    style={{
+                      width: "100%",
+                      background: "var(--surface)",
+                      border: "1px solid var(--border)",
+                      borderRadius: 6,
+                      padding: "8px 10px",
+                      fontSize: 12,
+                      color: "var(--text)",
+                      outline: "none",
+                      cursor: "pointer",
+                    }}
+                  >
+                    <optgroup label="Recommended Gemini Models">
+                      {DEFAULT_GEMINI_MODELS.map((m) => (
+                        <option key={m.id} value={m.id}>
+                          {m.name} — {m.tag || "Standard"} ({m.id})
+                        </option>
+                      ))}
+                    </optgroup>
+
+                    {availableModels.filter((m) => !DEFAULT_GEMINI_MODELS.some((d) => d.id === m.id)).length > 0 && (
+                      <optgroup label="Discovered Google API Models">
+                        {availableModels
+                          .filter((m) => !DEFAULT_GEMINI_MODELS.some((d) => d.id === m.id))
+                          .map((m) => (
+                            <option key={m.id} value={m.id}>
+                              {m.displayName || m.name} ({m.id})
+                            </option>
+                          ))}
+                      </optgroup>
+                    )}
+
+                    <option value="__custom__">+ Enter Custom Model Identifier…</option>
+                  </select>
+                </div>
+              )}
+
+              {/* Model Description Info Pill */}
+              {currentModelMeta?.description && (
+                <div
+                  style={{
+                    fontSize: 11,
+                    color: "var(--text-dim)",
+                    background: "var(--surface)",
+                    padding: "8px 10px",
+                    borderRadius: 6,
+                    border: "1px solid var(--border)",
+                    display: "flex",
+                    alignItems: "flex-start",
+                    gap: 6,
+                    lineHeight: 1.45,
+                  }}
+                >
+                  <span style={{ color: "var(--accent, #6366f1)", fontWeight: 700 }}>ℹ</span>
+                  <span>{currentModelMeta.description}</span>
+                </div>
+              )}
             </div>
 
             {/* Configurable Usage Limit */}
@@ -713,16 +1076,22 @@ export function AISettingsModal({
 
                 <button
                   type="submit"
-                  disabled={isLoading || isTesting || (!apiKey.trim() && usageLimit === currentSettings?.aiUsageLimit)}
+                  disabled={isLoading || isTesting || !canSave}
                   className="btn-primary"
                   style={{
                     margin: 0,
                     padding: "7px 14px",
                     fontSize: 12,
-                    opacity: (!apiKey.trim() && usageLimit === currentSettings?.aiUsageLimit) ? 0.6 : 1,
+                    opacity: !canSave ? 0.6 : 1,
                   }}
                 >
-                  {isLoading ? "Saving…" : currentSettings?.hasCustomKey ? "Update Key" : "Save Key"}
+                  {isLoading
+                    ? "Saving…"
+                    : apiKey.trim()
+                    ? (currentSettings?.hasCustomKey ? "Update Key & Model" : "Save Key & Model")
+                    : hasModelChanged
+                    ? "Update Model"
+                    : "Save Settings"}
                 </button>
               </div>
             </div>
