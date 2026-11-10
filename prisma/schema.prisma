@@ -29,6 +29,7 @@ model User {
   notifications Notification[]
   timesheetEntries TimesheetEntry[]
   checkIns         DailyCheckIn[]
+  apiTokens        ProjectApiToken[]
 }
 
 model Project {
@@ -46,6 +47,23 @@ model Project {
   members     ProjectMember[]
   issues      Issue[]
   timesheetEntries TimesheetEntry[]
+  apiTokens   ProjectApiToken[]
+}
+
+model ProjectApiToken {
+  id             String   @id @default(cuid())
+  projectId      String
+  userId         String
+  name           String
+  tokenHash      String   @unique
+  access         String   @default("READ")
+  sessionVersion Int
+  expiresAt      DateTime
+  createdAt      DateTime @default(now())
+  project        Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([projectId, userId])
 }
 
 model ProjectMember {

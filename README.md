@@ -101,3 +101,123 @@ For a new PostgreSQL database, skip `migrate resolve` and use `migrate deploy` w
 `node scripts/test-db-sync.cjs` checks safe adoption of the old schema, refusal to baseline drift, and migration behavior for new and managed databases.
 
 The optional MCP API requires an explicitly configured `BEACON_API_KEY`; requests fail closed when it is unset. Status changes through MCP also sync to GitHub after the actor's project permission check.
+
+## Project API for external apps
+
+Open a project and expand **External app API** to copy its endpoint and create a
+read-only or read/write key. The key is displayed once, expires after 90 days,
+and can be revoked there. Administrators can revoke any key in that project;
+other users can manage their own keys. Keys are stored only as SHA-256 hashes.
+Existing keys stop working after expiry, revocation, membership removal, or an
+account session-version change. Role changes take effect on the next request.
+
+Each project has its own endpoint:
+
+```text
+https://YOUR_BEACON_DOMAIN/api/v1/projects/PROJECT_ID
+```
+
+Use the immutable project ID, not its display key. The panel copies the full URL
+for the current deployment. A key works only for its project, even if its owner
+is an administrator. Do not use the legacy shared `BEACON_API_KEY` here. No new
+environment variable is needed. Store the key in the external app's backend
+secret configuration, and send `Authorization: Bearer KEY` on every request.
+Never place it in URLs or committed frontend code. Keys can read project notes
+and saved project credentials through the explicit `notes` resource; passwords,
+AI provider keys, API key hashes, and GitHub connection secrets are never exported.
+
+```bash
+# Set these in your shell or external application's secret configuration.
+BEACON_ENDPOINT='https://YOUR_BEACON_DOMAIN/api/v1/projects/PROJECT_ID'
+BEACON_PROJECT_KEY='YOUR_KEY'
+
+curl "$BEACON_ENDPOINT?resource=issues&limit=50" \
+  -H "Authorization: Bearer $BEACON_PROJECT_KEY"
+
+curl "$BEACON_ENDPOINT" \
+  -H "Authorization: Bearer $BEACON_PROJECT_KEY" \
+  -H 'Content-Type: application/json' \
+  --data '{"action":"update_status","issueId":"ISSUE_ID","status":"IN_PROGRESS","notes":"Reopened from external app"}'
+```
+
+GET responses use `{ "success": true, "data": ... }`. The default resource is
+`project`, returning metadata, counts, non-secret GitHub connection information,
+and the available resources. Fetch all applicable resources to retrieve the
+project's complete accessible data:
+
+| `resource` | Data |
+| --- | --- |
+| `project` | Project metadata and API resource discovery |
+| `issues` | Issue fields, reporter, assignee; supports `query`, `status`, `severity`, `priority` filters |
+| `issue&issueId=...` | One complete issue, comments, attachments, history, links within the project, and GitHub sync state |
+| `members` | Project membership, names, emails, project roles |
+| `assignees` | Assignable developers, respecting GitHub repository access |
+| `notes` | Notes, contacts and saved credentials; contacts/credentials retain their stored JSON-string format |
+| `statuses` | Standard allowed transitions and applicable custom statuses |
+| `timesheets` | This user's project entries; administrators can read all project entries |
+| `notifications` | This user's notifications about this project's issues |
+| `analytics` | Project issue counts grouped by status, priority, severity |
+| `schema` | JSON Schemas for every POST action and GET query, plus allowed status transitions |
+
+`issues`, `timesheets`, and `notifications` return `{ items, nextCursor }`.
+Continue with `&cursor=NEXT_CURSOR`, preserving filters, until `nextCursor` is
+null. `limit` defaults to 50 and is capped at 100. Fetch `resource=issue` for each
+issue when exporting its comments, attachments and history. These reads are not
+an atomic snapshot across requests. Attachments return their stored URLs and
+metadata, not file bytes. `GET /api/v1/projects` returns the project available to
+the supplied key and its `apiPath`; use a separate key for each project you connect.
+
+POST JSON to the same project endpoint. Consult `?resource=schema` for exact
+fields, defaults, enum values, and constraints. Available actions:
+
+| Actions | Purpose |
+| --- | --- |
+| `create_issue`, `update_issue`, `update_status` | Create/edit/assign issues and move or reopen them on the board |
+| `add_comment`, `add_attachments`, `delete_attachment` | Comments and attachment records |
+| `save_notes` | Replace notes, contacts and credentials together (send all three) |
+| `assign_member`, `remove_member` | Membership management (administrator only) |
+| `create_timesheet`, `update_timesheet`, `delete_timesheet` | Project time entries, using Beacon's existing ownership/date rules |
+| `connect_github`, `disconnect_github`, `retry_github_sync` | Configure, pause or retry GitHub issue sync |
+| `enable_github_updates`, `retry_github_updates` | Enable/retry incoming GitHub status updates |
+| `create_status`, `delete_status` | Manage this project's custom statuses (administrator only) |
+| `analyze_issue` | Analyze an issue with the user's configured AI provider and usage limits |
+| `delete_project` | Delete this project and its dependent data (lead/admin only) |
+
+Example create/update payloads:
+
+```json
+{"action":"create_issue","title":"Login button is unresponsive","assigneeId":"DEVELOPER_USER_ID","priority":"HIGH","severity":"UI"}
+```
+
+```json
+{"action":"update_issue","issueId":"ISSUE_ID","updates":{"title":"Updated title","assigneeId":"DEVELOPER_USER_ID"}}
+```
+
+The URL determines project ownership: do not send `projectId` or actor headers.
+Issue, attachment, status and timesheet IDs are checked against that project.
+All writes require a write key plus the user's current permissions. Viewers
+cannot write. Notes changes and project deletion require lead/admin access;
+GitHub actions require developer/lead/admin access. Issue field changes use the
+same transaction, history function, workflow checks and GitHub sync as Beacon.
+POST responses preserve action `data` and optional sync `warning` fields.
+
+Requests are limited to 1 MB of JSON. Upload attachment bytes separately, then
+send HTTPS file URLs with filenames and byte sizes. This API registers existing
+uploads; it does not provide a file-upload service. Cross-origin bearer requests
+support OPTIONS; cookie authentication is not accepted by the API.
+
+Errors use `{ "success": false, "error": "..." }`, optionally with validation
+`details`. Status codes: 400 invalid input/action/workflow, 401 invalid key,
+403 insufficient access, 404 resource outside this project or missing,
+413 oversized body, 415 unsupported content type, 500 unexpected failure.
+
+Account-wide features (user/password administration, global status management,
+personal attendance/check-in, account AI configuration and creating unrelated
+projects) remain outside a project credential's authority. API capabilities
+match existing project features; there is no issue-delete or issue-link editing
+operation because Beacon currently has no corresponding project action.
+
+Deployment requires the included `project_api_tokens` migration. Local SQLite:
+`npx prisma migrate deploy`. Vercel's existing build applies the included
+PostgreSQL migration through `scripts/db-sync.js`. Test with
+`npm run test:project-api` and build with `npm run build`.

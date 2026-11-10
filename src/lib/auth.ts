@@ -4,6 +4,7 @@ import { GitHubLoginFailure, resolveGitHubLogin } from "./github-login";
 import CredentialsProvider from "next-auth/providers/credentials";
 import bcrypt from "bcryptjs";
 import { prisma } from "./db";
+import { apiSession } from "./project-api/context";
 
 export const authOptions: NextAuthOptions = {
   session: {
@@ -143,6 +144,8 @@ export const authOptions: NextAuthOptions = {
 };
 
 export async function getServerAuthSession() {
+  const integrationSession = apiSession.getStore();
+  if (integrationSession) return integrationSession;
   return getServerSession(authOptions);
 }
 

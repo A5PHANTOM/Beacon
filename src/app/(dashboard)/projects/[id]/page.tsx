@@ -5,6 +5,7 @@ import { IssueWorkspace, type WorkspaceIssue, type ProjectMemberItem } from "@/c
 import type { IssueStatus } from "@/lib/workflow";
 
 import { GitHubConnectionPanel } from "@/components/projects/github-connection";
+import { ProjectApiPanel } from "@/components/projects/project-api-panel";
 import { can } from "@/lib/permissions";
 import type { GlobalRole, ProjectRole } from "@/lib/types";
 
@@ -130,7 +131,7 @@ export default async function ProjectIssuesPage({ params }: Props) {
     <IssueWorkspace
       githubInboundEnabled={!!project.github?.enabled && !!project.github?.inboundEnabled}
       assignmentConnectionKey={project.github ? `${project.github.owner}/${project.github.repo}:${project.github.enabled}` : "beacon"}
-      integrationPanel={can((userMembership?.roleInProject ?? "VIEWER") as ProjectRole, "project:github", session.user.role as GlobalRole) && <GitHubConnectionPanel projectId={project.id} connection={project.github} incomingPending={incomingPending} pending={pending.length} errors={pending.filter(i => i.githubSync?.lastError).map(i => ({ key: `${project.key}-${i.number}`, message: i.githubSync!.lastError! }))} />}
+      integrationPanel={<><ProjectApiPanel projectId={project.id} canWrite={can((userMembership?.roleInProject ?? "VIEWER") as ProjectRole, "issue:update", session.user.role as GlobalRole)} />{can((userMembership?.roleInProject ?? "VIEWER") as ProjectRole, "project:github", session.user.role as GlobalRole) && <GitHubConnectionPanel projectId={project.id} connection={project.github} incomingPending={incomingPending} pending={pending.length} errors={pending.filter(i => i.githubSync?.lastError).map(i => ({ key: `${project.key}-${i.number}`, message: i.githubSync!.lastError! }))} />}</>}
       project={{
         id: project.id,
         name: project.name,

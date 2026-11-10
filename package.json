@@ -13,7 +13,8 @@
     "test:github": "node scripts/test-github-sync.cjs",
     "test:github-login": "node scripts/test-github-login.cjs",
     "test:assignment-email": "node scripts/test-assignment-email.cjs",
-    "test:github-webhooks": "node scripts/test-github-webhooks.cjs"
+    "test:github-webhooks": "node scripts/test-github-webhooks.cjs",
+    "test:project-api": "node scripts/test-project-api.cjs"
   },
   "dependencies": {
     "@prisma/client": "^6.19.3",
